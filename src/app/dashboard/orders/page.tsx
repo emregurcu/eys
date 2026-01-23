@@ -128,6 +128,7 @@ export default function OrdersPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [storeFilter, setStoreFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('all');
   
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -214,7 +215,41 @@ export default function OrdersPage() {
       order.customerName.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || order.status === statusFilter;
     const matchStore = storeFilter === 'all' || order.store.id === storeFilter;
-    return matchSearch && matchStatus && matchStore;
+    
+    // Tarih filtresi
+    let matchDate = true;
+    if (dateFilter !== 'all') {
+      const orderDate = new Date(order.orderDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      switch (dateFilter) {
+        case 'today':
+          const todayStart = new Date(today);
+          matchDate = orderDate >= todayStart;
+          break;
+        case 'week':
+          const weekStart = new Date(today);
+          weekStart.setDate(today.getDate() - 7);
+          matchDate = orderDate >= weekStart;
+          break;
+        case 'month':
+          const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+          matchDate = orderDate >= monthStart;
+          break;
+        case 'lastmonth':
+          const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+          matchDate = orderDate >= lastMonthStart && orderDate <= lastMonthEnd;
+          break;
+        case 'year':
+          const yearStart = new Date(today.getFullYear(), 0, 1);
+          matchDate = orderDate >= yearStart;
+          break;
+      }
+    }
+    
+    return matchSearch && matchStatus && matchStore && matchDate;
   });
 
   // Maliyet hesaplama - anlık önizleme
@@ -521,6 +556,19 @@ export default function OrdersPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={dateFilter} onValueChange={setDateFilter}>
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Tarih" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tüm Tarihler</SelectItem>
+                <SelectItem value="today">Bugün</SelectItem>
+                <SelectItem value="week">Son 7 Gün</SelectItem>
+                <SelectItem value="month">Bu Ay</SelectItem>
+                <SelectItem value="lastmonth">Geçen Ay</SelectItem>
+                <SelectItem value="year">Bu Yıl</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
@@ -533,6 +581,7 @@ export default function OrdersPage() {
               <thead>
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-4 font-medium">Sipariş</th>
+                  <th className="text-left p-4 font-medium hidden sm:table-cell">Tarih</th>
                   <th className="text-left p-4 font-medium hidden md:table-cell">Müşteri</th>
                   <th className="text-left p-4 font-medium hidden lg:table-cell">Mağaza</th>
                   <th className="text-left p-4 font-medium">Durum</th>
@@ -548,6 +597,7 @@ export default function OrdersPage() {
                   [...Array(5)].map((_, i) => (
                     <tr key={i} className="border-b">
                       <td className="p-4"><div className="h-4 bg-muted rounded animate-pulse w-24" /></td>
+                      <td className="p-4 hidden sm:table-cell"><div className="h-4 bg-muted rounded animate-pulse w-20" /></td>
                       <td className="p-4 hidden md:table-cell"><div className="h-4 bg-muted rounded animate-pulse w-32" /></td>
                       <td className="p-4 hidden lg:table-cell"><div className="h-4 bg-muted rounded animate-pulse w-20" /></td>
                       <td className="p-4"><div className="h-6 bg-muted rounded animate-pulse w-16" /></td>
@@ -560,12 +610,10 @@ export default function OrdersPage() {
                 ) : filteredOrders.map((order) => (
                   <tr key={order.id} className="border-b hover:bg-muted/30">
                     <td className="p-4">
-                      <div>
-                        <p className="font-medium">{order.orderNumber}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {formatDate(order.orderDate)}
-                        </p>
-                      </div>
+                      <p className="font-medium">{order.orderNumber}</p>
+                    </td>
+                    <td className="p-4 hidden sm:table-cell">
+                      <p className="text-sm">{formatDate(order.orderDate)}</p>
                     </td>
                     <td className="p-4 hidden md:table-cell">
                       <div>
