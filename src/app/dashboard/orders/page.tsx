@@ -44,6 +44,7 @@ import {
   orderStatusColors,
   formatCurrency,
   formatDate,
+  formatShortDate,
 } from '@/lib/utils';
 import { exportSingleOrderPDF, exportOrderListPDF } from '@/lib/pdf-export';
 
@@ -129,6 +130,7 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [storeFilter, setStoreFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('newest');
   
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -250,6 +252,28 @@ export default function OrdersPage() {
     }
     
     return matchSearch && matchStatus && matchStore && matchDate;
+  });
+
+  // Sıralama
+  const sortedOrders = [...filteredOrders].sort((a, b) => {
+    switch (sortBy) {
+      case 'newest':
+        return new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime();
+      case 'oldest':
+        return new Date(a.orderDate).getTime() - new Date(b.orderDate).getTime();
+      case 'highest':
+        return b.salePrice - a.salePrice;
+      case 'lowest':
+        return a.salePrice - b.salePrice;
+      case 'profit_high':
+        return (b.netProfit || 0) - (a.netProfit || 0);
+      case 'profit_low':
+        return (a.netProfit || 0) - (b.netProfit || 0);
+      case 'customer':
+        return a.customerName.localeCompare(b.customerName);
+      default:
+        return 0;
+    }
   });
 
   // Maliyet hesaplama - anlık önizleme
@@ -445,8 +469,8 @@ export default function OrdersPage() {
   };
 
   // Toplam kar/zarar hesapla
-  const totalProfit = filteredOrders.reduce((sum, o) => sum + (o.netProfit || 0), 0);
-  const totalRevenue = filteredOrders.reduce((sum, o) => sum + (o.salePrice || 0), 0);
+  const totalProfit = sortedOrders.reduce((sum, o) => sum + (o.netProfit || 0), 0);
+  const totalRevenue = sortedOrders.reduce((sum, o) => sum + (o.salePrice || 0), 0);
 
   // PDF için detaylı sipariş verisi al
   const fetchOrderForPDF = async (orderId: string) => {
@@ -475,7 +499,7 @@ export default function OrdersPage() {
     toast.info('PDF hazırlanıyor...');
     // Tüm siparişlerin detaylarını al
     const fullOrders = await Promise.all(
-      filteredOrders.map(order => fetchOrderForPDF(order.id))
+      sortedOrders.map(order => fetchOrderForPDF(order.id))
     );
     const validOrders = fullOrders.filter(o => o !== null);
     if (validOrders.length > 0) {
@@ -496,7 +520,7 @@ export default function OrdersPage() {
         <div>
           <h1 className="text-2xl font-bold">Siparişler</h1>
           <p className="text-muted-foreground">
-            {filteredOrders.length} sipariş • 
+            {sortedOrders.length} sipariş • 
             Toplam: {formatCurrency(totalRevenue, 'USD')} • 
             <span className={totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}>
               {' '}Kar: {formatCurrency(totalProfit, 'USD')}
@@ -507,7 +531,7 @@ export default function OrdersPage() {
           <Button 
             variant="outline" 
             onClick={handleBulkPDF}
-            disabled={filteredOrders.length === 0}
+            disabled={sortedOrders.length === 0}
           >
             <FileDown className="mr-2 h-4 w-4" /> PDF
           </Button>
@@ -557,7 +581,7 @@ export default function OrdersPage() {
               </SelectContent>
             </Select>
             <Select value={dateFilter} onValueChange={setDateFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectTrigger className="w-full sm:w-[150px]">
                 <SelectValue placeholder="Tarih" />
               </SelectTrigger>
               <SelectContent>
@@ -567,6 +591,20 @@ export default function OrdersPage() {
                 <SelectItem value="month">Bu Ay</SelectItem>
                 <SelectItem value="lastmonth">Geçen Ay</SelectItem>
                 <SelectItem value="year">Bu Yıl</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-full sm:w-[160px]">
+                <SelectValue placeholder="Sırala" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">En Yeni</SelectItem>
+                <SelectItem value="oldest">En Eski</SelectItem>
+                <SelectItem value="highest">Fiyat (Yüksek)</SelectItem>
+                <SelectItem value="lowest">Fiyat (Düşük)</SelectItem>
+                <SelectItem value="profit_high">Kar (Yüksek)</SelectItem>
+                <SelectItem value="profit_low">Kar (Düşük)</SelectItem>
+                <SelectItem value="customer">Müşteri (A-Z)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -609,13 +647,13 @@ export default function OrdersPage() {
                       <td className="p-4"><div className="h-8 bg-muted rounded animate-pulse w-8 ml-auto" /></td>
                     </tr>
                   ))
-                ) : filteredOrders.map((order) => (
+                ) : sortedOrders.map((order) => (
                   <tr key={order.id} className="border-b hover:bg-muted/30">
                     <td className="p-4">
                       <p className="font-medium">{order.orderNumber}</p>
                     </td>
                     <td className="p-4 hidden sm:table-cell">
-                      <p className="text-sm">{formatDate(order.orderDate)}</p>
+                      <p className="text-sm">{formatShortDate(order.orderDate)}</p>
                     </td>
                     <td className="p-4 hidden md:table-cell">
                       <div className="max-w-[200px]">
@@ -699,7 +737,7 @@ export default function OrdersPage() {
                     </td>
                   </tr>
                 ))}
-                {!pageLoading && filteredOrders.length === 0 && (
+                {!pageLoading && sortedOrders.length === 0 && (
                   <tr>
                     <td colSpan={8} className="p-8 text-center text-muted-foreground">
                       Sipariş bulunamadı
