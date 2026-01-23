@@ -33,19 +33,7 @@ interface Order {
   }>;
 }
 
-const statusLabels: Record<string, string> = {
-  NEW: 'Yeni',
-  PROCESSING: 'İşleniyor',
-  PRODUCTION: 'Üretimde',
-  READY: 'Hazır',
-  SHIPPED: 'Kargoda',
-  DELIVERED: 'Teslim Edildi',
-  RETURNED: 'İade',
-  CANCELLED: 'İptal',
-  PROBLEM: 'Problem',
-};
-
-// Tek sipariş PDF'i - Üretim için sadeleştirilmiş
+// Tek sipariş PDF'i - Üretim için
 export function exportSingleOrderPDF(order: Order) {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -68,7 +56,7 @@ export function exportSingleOrderPDF(order: Order) {
     doc.setFont('helvetica', 'bold');
     doc.text(label, 14, y);
     doc.setFont('helvetica', 'normal');
-    doc.text(value, 60, y);
+    doc.text(value, 55, y);
     y += 8;
   };
   
@@ -79,62 +67,48 @@ export function exportSingleOrderPDF(order: Order) {
   
   y += 5;
   
+  // Ürün Bilgisi - Boyut ve Çerçeve
+  doc.setFont('helvetica', 'bold');
+  doc.text('Urun:', 14, y);
+  doc.setFont('helvetica', 'normal');
+  
+  if (order.items && order.items.length > 0) {
+    const productInfo = order.items.map(item => {
+      const size = item.canvasSize?.name || '-';
+      const frame = item.frameOption?.name || 'Cercevesiz';
+      return `${size} - ${frame} (x${item.quantity})`;
+    }).join(', ');
+    
+    const productLines = doc.splitTextToSize(productInfo, pageWidth - 70);
+    doc.text(productLines, 55, y);
+    y += productLines.length * 6 + 5;
+  } else {
+    doc.text('-', 55, y);
+    y += 10;
+  }
+  
+  y += 5;
+  
   // Teslimat Adresi
   doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
   doc.text('Teslimat Adresi:', 14, y);
-  y += 6;
+  y += 8;
   doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
   
   if (order.shippingAddress) {
     const addressLines = doc.splitTextToSize(order.shippingAddress, pageWidth - 28);
     doc.text(addressLines, 14, y);
-    y += addressLines.length * 5 + 10;
+    y += addressLines.length * 6 + 10;
   } else {
-    doc.text('-', 14, y);
+    doc.text('Adres bilgisi mevcut degil', 14, y);
     y += 15;
-  }
-  
-  // Ürünler tablosu - Boyut ve Çerçeve bilgisi
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.text('Urunler', 14, y);
-  y += 5;
-  
-  if (order.items && order.items.length > 0) {
-    autoTable(doc, {
-      startY: y,
-      head: [['Urun', 'Boyut', 'Cerceve', 'Adet']],
-      body: order.items.map(item => [
-        item.title || '-',
-        item.canvasSize?.name || '-',
-        item.frameOption?.name || 'Cercevesiz',
-        item.quantity.toString(),
-      ]),
-      styles: { fontSize: 10 },
-      headStyles: { fillColor: [66, 66, 66] },
-      columnStyles: {
-        0: { cellWidth: 70 },
-        1: { cellWidth: 40 },
-        2: { cellWidth: 40 },
-        3: { cellWidth: 25, halign: 'center' },
-      },
-    });
-  } else {
-    // Eğer items yoksa genel bilgi göster
-    autoTable(doc, {
-      startY: y,
-      head: [['Urun Bilgisi']],
-      body: [['Urun detayi mevcut degil']],
-      styles: { fontSize: 10 },
-      headStyles: { fillColor: [66, 66, 66] },
-    });
   }
   
   // Notlar
   if (order.notes) {
-    y = (doc as any).lastAutoTable.finalY + 15;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
     doc.text('Notlar:', 14, y);
     y += 6;
     doc.setFont('helvetica', 'normal');
@@ -151,8 +125,8 @@ export function exportSingleOrderPDF(order: Order) {
   doc.save(`siparis-${order.orderNumber}.pdf`);
 }
 
-// Çoklu sipariş listesi PDF'i
-export function exportOrderListPDF(orders: Order[], title: string = 'Sipariş Listesi') {
+// Çoklu sipariş listesi PDF'i - Sadeleştirilmiş
+export function exportOrderListPDF(orders: Order[], title: string = 'Siparis Listesi') {
   const doc = new jsPDF('landscape');
   const pageWidth = doc.internal.pageSize.getWidth();
   
@@ -161,64 +135,51 @@ export function exportOrderListPDF(orders: Order[], title: string = 'Sipariş Li
   doc.setFont('helvetica', 'bold');
   doc.text(title, pageWidth / 2, 15, { align: 'center' });
   
-  // Tarih
+  // Tarih ve toplam
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Oluşturulma: ${new Date().toLocaleString('tr-TR')}`, pageWidth / 2, 22, { align: 'center' });
+  doc.text(`Toplam: ${orders.length} siparis | Tarih: ${new Date().toLocaleDateString('tr-TR')}`, pageWidth / 2, 22, { align: 'center' });
   
-  // Özet bilgiler
-  const totalRevenue = orders.reduce((sum, o) => sum + o.salePrice, 0);
-  const totalProfit = orders.reduce((sum, o) => sum + o.netProfit, 0);
-  const avgMargin = orders.length > 0 
-    ? orders.reduce((sum, o) => sum + o.profitMargin, 0) / orders.length 
-    : 0;
-  
-  doc.setFontSize(10);
-  doc.text(`Toplam Sipariş: ${orders.length}`, 14, 30);
-  doc.text(`Toplam Ciro: $${totalRevenue.toFixed(2)}`, 80, 30);
-  doc.text(`Toplam Kar: $${totalProfit.toFixed(2)}`, 150, 30);
-  doc.text(`Ort. Kar Marjı: %${avgMargin.toFixed(1)}`, 220, 30);
-  
-  // Tablo
+  // Tablo - Maliyet ve kar bilgileri kaldırıldı
   autoTable(doc, {
-    startY: 38,
+    startY: 30,
     head: [[
-      'Sipariş No',
-      'Mağaza',
-      'Müşteri',
-      'Ülke',
-      'Durum',
+      'Siparis No',
+      'Magaza',
+      'Musteri',
+      'Urun (Boyut - Cerceve)',
+      'Adres',
       'Tarih',
-      'Satış',
-      'Maliyet',
-      'Kar',
-      'Marj %',
     ]],
-    body: orders.map(order => [
-      order.orderNumber,
-      order.store?.name || '-',
-      order.customerName,
-      order.country?.name || order.shippingCountry || '-',
-      statusLabels[order.status] || order.status,
-      new Date(order.orderDate).toLocaleDateString('tr-TR'),
-      `$${order.salePrice.toFixed(2)}`,
-      `$${order.totalCost.toFixed(2)}`,
-      `$${order.netProfit.toFixed(2)}`,
-      `${order.profitMargin.toFixed(1)}%`,
-    ]),
-    styles: { fontSize: 8 },
-    headStyles: { fillColor: [66, 66, 66], fontSize: 8 },
+    body: orders.map(order => {
+      // Ürün bilgisi
+      let productInfo = '-';
+      if (order.items && order.items.length > 0) {
+        productInfo = order.items.map(item => {
+          const size = item.canvasSize?.name || '-';
+          const frame = item.frameOption?.name || 'Cercevesiz';
+          return `${size} - ${frame} (x${item.quantity})`;
+        }).join('\n');
+      }
+      
+      return [
+        order.orderNumber,
+        order.store?.name || '-',
+        order.customerName,
+        productInfo,
+        order.shippingAddress || '-',
+        new Date(order.orderDate).toLocaleDateString('tr-TR'),
+      ];
+    }),
+    styles: { fontSize: 8, cellPadding: 3 },
+    headStyles: { fillColor: [66, 66, 66], fontSize: 9 },
     columnStyles: {
-      0: { cellWidth: 25 },
+      0: { cellWidth: 28 },
       1: { cellWidth: 30 },
       2: { cellWidth: 35 },
-      3: { cellWidth: 25 },
-      4: { cellWidth: 22 },
+      3: { cellWidth: 50 },
+      4: { cellWidth: 80 },
       5: { cellWidth: 22 },
-      6: { cellWidth: 20, halign: 'right' },
-      7: { cellWidth: 20, halign: 'right' },
-      8: { cellWidth: 20, halign: 'right' },
-      9: { cellWidth: 18, halign: 'right' },
     },
   });
   

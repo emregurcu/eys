@@ -413,6 +413,48 @@ export default function OrdersPage() {
   const totalProfit = filteredOrders.reduce((sum, o) => sum + (o.netProfit || 0), 0);
   const totalRevenue = filteredOrders.reduce((sum, o) => sum + (o.salePrice || 0), 0);
 
+  // PDF için detaylı sipariş verisi al
+  const fetchOrderForPDF = async (orderId: string) => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (error) {
+      console.error('PDF veri hatası:', error);
+    }
+    return null;
+  };
+
+  const handleSinglePDF = async (order: Order) => {
+    toast.info('PDF hazırlanıyor...');
+    const fullOrder = await fetchOrderForPDF(order.id);
+    if (fullOrder) {
+      exportSingleOrderPDF(fullOrder);
+    } else {
+      exportSingleOrderPDF(order as any);
+    }
+  };
+
+  const handleBulkPDF = async () => {
+    toast.info('PDF hazırlanıyor...');
+    // Tüm siparişlerin detaylarını al
+    const fullOrders = await Promise.all(
+      filteredOrders.map(order => fetchOrderForPDF(order.id))
+    );
+    const validOrders = fullOrders.filter(o => o !== null);
+    if (validOrders.length > 0) {
+      exportOrderListPDF(
+        validOrders,
+        storeFilter !== 'all'
+          ? `${stores.find(s => s.id === storeFilter)?.name || 'Magaza'} Siparisleri`
+          : 'Tum Siparisler'
+      );
+    } else {
+      toast.error('Siparişler yüklenemedi');
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -429,12 +471,7 @@ export default function OrdersPage() {
         <div className="flex gap-2">
           <Button 
             variant="outline" 
-            onClick={() => exportOrderListPDF(
-              filteredOrders as any, 
-              storeFilter !== 'all' 
-                ? `${stores.find(s => s.id === storeFilter)?.name || 'Mağaza'} Siparişleri`
-                : 'Tüm Siparişler'
-            )}
+            onClick={handleBulkPDF}
             disabled={filteredOrders.length === 0}
           >
             <FileDown className="mr-2 h-4 w-4" /> PDF
@@ -579,7 +616,7 @@ export default function OrdersPage() {
                             <Eye className="mr-2 h-4 w-4" />
                             Detay
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => exportSingleOrderPDF(order as any)}>
+                          <DropdownMenuItem onClick={() => handleSinglePDF(order)}>
                             <FileDown className="mr-2 h-4 w-4" />
                             PDF İndir
                           </DropdownMenuItem>
@@ -742,7 +779,7 @@ export default function OrdersPage() {
                 </Select>
                 <Button 
                   variant="outline" 
-                  onClick={() => exportSingleOrderPDF(selectedOrder as any)}
+                  onClick={() => handleSinglePDF(selectedOrder)}
                 >
                   <FileDown className="mr-2 h-4 w-4" /> PDF İndir
                 </Button>
@@ -805,6 +842,17 @@ export default function OrdersPage() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* Teslimat Adresi */}
+            <div>
+              <label className="text-sm font-medium">Teslimat Adresi *</label>
+              <textarea
+                className="w-full min-h-[80px] p-3 border rounded-md text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder="Müşteri adres bilgilerini buraya yapıştırın..."
+                value={orderForm.shippingAddress}
+                onChange={(e) => setOrderForm({ ...orderForm, shippingAddress: e.target.value })}
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
