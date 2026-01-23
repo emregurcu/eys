@@ -805,14 +805,19 @@ export default function OrdersPage() {
                     </td>
                     <td className="p-2">
                       {order.imageUrl ? (
-                        <div className="w-16 h-16 border rounded overflow-hidden bg-muted/20">
+                        <div className="w-16 h-16 border rounded overflow-hidden bg-muted/20 flex items-center justify-center">
                           <img 
                             src={order.imageUrl} 
                             alt="Ürün görseli" 
                             className="w-full h-full object-cover cursor-pointer hover:opacity-80"
                             onClick={() => setSelectedOrder(order)}
                             onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                              const parent = target.parentElement;
+                              if (parent) {
+                                parent.innerHTML = '<div class="w-full h-full flex items-center justify-center"><Image class="h-6 w-6 text-muted-foreground" /></div>';
+                              }
                             }}
                           />
                         </div>
@@ -1039,25 +1044,31 @@ export default function OrdersPage() {
               <div>
                 <h4 className="font-medium mb-2">Ürün Görseli</h4>
                 {selectedOrder.imageUrl ? (
-                  <div className="border rounded-lg overflow-hidden">
-                    <img 
-                      src={selectedOrder.imageUrl} 
-                      alt="Ürün görseli" 
-                      className="max-w-full max-h-96 object-contain mx-auto bg-muted/20"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                        const parent = (e.target as HTMLImageElement).parentElement;
-                        if (parent) {
-                          parent.innerHTML = '<p class="text-center text-muted-foreground p-4">Görsel yüklenemedi</p>';
-                        }
-                      }}
-                    />
+                  <div className="border rounded-lg overflow-hidden bg-muted/20">
+                    <div className="p-2">
+                      <img 
+                        src={selectedOrder.imageUrl} 
+                        alt="Ürün görseli" 
+                        className="max-w-full max-h-96 object-contain mx-auto"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const parent = target.parentElement?.parentElement;
+                          if (parent) {
+                            parent.innerHTML = '<div class="p-8 text-center text-muted-foreground"><Image class="h-12 w-12 mx-auto mb-2 opacity-50" /><p>Görsel yüklenemedi</p></div>';
+                          }
+                        }}
+                        onLoad={() => {
+                          console.log('Görsel yüklendi:', selectedOrder.imageUrl?.substring(0, 50));
+                        }}
+                      />
+                    </div>
                     {!selectedOrder.imageUrl.startsWith('data:') && (
                       <a 
                         href={selectedOrder.imageUrl} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="block text-center text-sm text-primary p-2 hover:underline"
+                        className="block text-center text-sm text-primary p-2 hover:underline border-t"
                       >
                         Görseli Aç
                       </a>
