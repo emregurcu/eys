@@ -45,7 +45,7 @@ const statusLabels: Record<string, string> = {
   PROBLEM: 'Problem',
 };
 
-// Tek sipariş PDF'i
+// Tek sipariş PDF'i - Üretim için sadeleştirilmiş
 export function exportSingleOrderPDF(order: Order) {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -53,12 +53,12 @@ export function exportSingleOrderPDF(order: Order) {
   // Başlık
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  doc.text('Sipariş Detayı', pageWidth / 2, 20, { align: 'center' });
+  doc.text('Siparis Bilgisi', pageWidth / 2, 20, { align: 'center' });
   
   // Sipariş numarası
   doc.setFontSize(14);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Sipariş No: ${order.orderNumber}`, pageWidth / 2, 30, { align: 'center' });
+  doc.text(`Siparis No: ${order.orderNumber}`, pageWidth / 2, 30, { align: 'center' });
   
   // Temel bilgiler
   let y = 45;
@@ -72,84 +72,69 @@ export function exportSingleOrderPDF(order: Order) {
     y += 8;
   };
   
-  addRow('Mağaza:', order.store?.name || '-');
-  addRow('Müşteri:', order.customerName);
-  if (order.customerEmail) addRow('E-posta:', order.customerEmail);
-  addRow('Ülke:', order.country?.name || order.shippingCountry || '-');
-  addRow('Durum:', statusLabels[order.status] || order.status);
-  addRow('Sipariş Tarihi:', new Date(order.orderDate).toLocaleDateString('tr-TR'));
-  
-  if (order.trackingNumber) {
-    addRow('Kargo Takip:', `${order.trackingCompany || ''} - ${order.trackingNumber}`);
-  }
+  addRow('Magaza:', order.store?.name || '-');
+  addRow('Musteri:', order.customerName);
+  addRow('Ulke:', order.country?.name || order.shippingCountry || '-');
+  addRow('Tarih:', new Date(order.orderDate).toLocaleDateString('tr-TR'));
   
   y += 5;
   
-  // Adres
+  // Teslimat Adresi
+  doc.setFont('helvetica', 'bold');
+  doc.text('Teslimat Adresi:', 14, y);
+  y += 6;
+  doc.setFont('helvetica', 'normal');
+  
   if (order.shippingAddress) {
-    doc.setFont('helvetica', 'bold');
-    doc.text('Teslimat Adresi:', 14, y);
-    y += 6;
-    doc.setFont('helvetica', 'normal');
     const addressLines = doc.splitTextToSize(order.shippingAddress, pageWidth - 28);
     doc.text(addressLines, 14, y);
-    y += addressLines.length * 5 + 5;
+    y += addressLines.length * 5 + 10;
+  } else {
+    doc.text('-', 14, y);
+    y += 15;
   }
   
-  // Ürünler tablosu
+  // Ürünler tablosu - Boyut ve Çerçeve bilgisi
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('Urunler', 14, y);
+  y += 5;
+  
   if (order.items && order.items.length > 0) {
-    y += 5;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Ürünler', 14, y);
-    y += 5;
-    
     autoTable(doc, {
       startY: y,
-      head: [['Ürün', 'Boyut', 'Çerçeve', 'Adet', 'Fiyat']],
+      head: [['Urun', 'Boyut', 'Cerceve', 'Adet']],
       body: order.items.map(item => [
-        item.title,
+        item.title || '-',
         item.canvasSize?.name || '-',
-        item.frameOption?.name || '-',
+        item.frameOption?.name || 'Cercevesiz',
         item.quantity.toString(),
-        `$${item.salePrice.toFixed(2)}`,
       ]),
-      styles: { fontSize: 9 },
+      styles: { fontSize: 10 },
+      headStyles: { fillColor: [66, 66, 66] },
+      columnStyles: {
+        0: { cellWidth: 70 },
+        1: { cellWidth: 40 },
+        2: { cellWidth: 40 },
+        3: { cellWidth: 25, halign: 'center' },
+      },
+    });
+  } else {
+    // Eğer items yoksa genel bilgi göster
+    autoTable(doc, {
+      startY: y,
+      head: [['Urun Bilgisi']],
+      body: [['Urun detayi mevcut degil']],
+      styles: { fontSize: 10 },
       headStyles: { fillColor: [66, 66, 66] },
     });
-    
-    y = (doc as any).lastAutoTable.finalY + 10;
   }
-  
-  // Finansal özet
-  doc.setFont('helvetica', 'bold');
-  doc.text('Finansal Özet', 14, y);
-  y += 8;
-  
-  const financialData = [
-    ['Satış Fiyatı', `$${order.salePrice.toFixed(2)}`],
-    ['Ürün Maliyeti', `$${order.productCost.toFixed(2)}`],
-    ['Kargo Maliyeti', `$${order.shippingCost.toFixed(2)}`],
-    ['Etsy Kesintileri', `$${order.etsyFees.toFixed(2)}`],
-    ['Toplam Maliyet', `$${order.totalCost.toFixed(2)}`],
-    ['Net Kar', `$${order.netProfit.toFixed(2)}`],
-    ['Kar Marjı', `%${order.profitMargin.toFixed(1)}`],
-  ];
-  
-  autoTable(doc, {
-    startY: y,
-    body: financialData,
-    styles: { fontSize: 10 },
-    columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 50 },
-      1: { halign: 'right' },
-    },
-    theme: 'plain',
-  });
   
   // Notlar
   if (order.notes) {
-    y = (doc as any).lastAutoTable.finalY + 10;
+    y = (doc as any).lastAutoTable.finalY + 15;
     doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
     doc.text('Notlar:', 14, y);
     y += 6;
     doc.setFont('helvetica', 'normal');
@@ -161,7 +146,7 @@ export function exportSingleOrderPDF(order: Order) {
   const footerY = doc.internal.pageSize.getHeight() - 10;
   doc.setFontSize(8);
   doc.setTextColor(128);
-  doc.text(`Oluşturulma: ${new Date().toLocaleString('tr-TR')}`, 14, footerY);
+  doc.text(`Olusturulma: ${new Date().toLocaleString('tr-TR')}`, 14, footerY);
   
   doc.save(`siparis-${order.orderNumber}.pdf`);
 }
