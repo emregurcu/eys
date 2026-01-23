@@ -51,7 +51,7 @@ export async function PUT(
     const updateData: any = {};
     if (status) updateData.status = status;
     if (priority) updateData.priority = priority;
-    if (assigneeId !== undefined) updateData.assigneeId = assigneeId || null;
+    if (assigneeId !== undefined) updateData.assignedTo = assigneeId || null;
     if (description !== undefined) updateData.description = description;
 
     if (status === 'RESOLVED') {

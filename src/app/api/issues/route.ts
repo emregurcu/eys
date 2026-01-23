@@ -75,8 +75,8 @@ export async function POST(req: NextRequest) {
         description: description || '',
         priority: priority || 2,
         status: 'OPEN',
-        creatorId: session.user.id,
-        assigneeId: assigneeId || null,
+        createdBy: session.user.id,
+        assignedTo: assigneeId || null,
       },
       include: {
         store: { select: { name: true } },
