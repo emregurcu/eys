@@ -129,6 +129,12 @@ export async function POST(req: NextRequest) {
     if (data.salesTax) noteParts.push(`Vergi: $${data.salesTax}`);
     if (data.etsyOrderUrl) noteParts.push(`Etsy: ${data.etsyOrderUrl}`);
 
+    // Build item notes with dimensions and frame
+    const itemNotes: string[] = [];
+    if (data.dimensions) itemNotes.push(`Boyut: ${data.dimensions}`);
+    if (data.frameOption) itemNotes.push(`Çerçeve: ${data.frameOption}`);
+    const itemNotesStr = itemNotes.length > 0 ? itemNotes.join(' | ') : null;
+
     // Create new order
     const order = await prisma.order.create({
       data: {
@@ -148,12 +154,14 @@ export async function POST(req: NextRequest) {
             title: item.title || data.productTitle || 'Canvas Print',
             quantity: item.quantity || data.quantity || 1,
             salePrice: item.price || data.itemPrice || data.totalPrice,
+            notes: itemNotesStr,
           })),
         } : {
           create: [{
             title: data.productTitle || 'Canvas Print',
             quantity: data.quantity || 1,
             salePrice: data.itemPrice || data.totalPrice,
+            notes: itemNotesStr,
           }],
         },
       },

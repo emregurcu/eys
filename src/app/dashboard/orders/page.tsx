@@ -660,7 +660,11 @@ export default function OrdersPage() {
                         {order.items && order.items.length > 0 ? (
                           order.items.map((item: any, idx: number) => (
                             <p key={idx} className="text-sm truncate">
-                              {item.canvasSize?.name || '-'} - {item.frameOption?.name || 'Çerçevesiz'}
+                              {item.notes ? item.notes : (
+                                <>
+                                  {item.canvasSize?.name || '-'} - {item.frameOption?.name || 'Çerçevesiz'}
+                                </>
+                              )}
                               {item.quantity > 1 && ` (x${item.quantity})`}
                             </p>
                           ))
@@ -793,12 +797,20 @@ export default function OrdersPage() {
                 {selectedOrder.items && selectedOrder.items.length > 0 ? (
                   <div className="space-y-2">
                     {selectedOrder.items.map((item: any, i: number) => (
-                      <div key={i} className="flex justify-between items-center text-sm">
-                        <div>
-                          <span className="font-medium">{item.canvasSize?.name || '-'}</span>
-                          <span className="text-muted-foreground"> - </span>
-                          <span>{item.frameOption?.name || 'Çerçevesiz'}</span>
-                          {item.quantity > 1 && <span className="text-muted-foreground"> (x{item.quantity})</span>}
+                      <div key={i} className="flex flex-col gap-1 text-sm border-b pb-2 last:border-0">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            {item.notes ? (
+                              <span className="font-medium">{item.notes}</span>
+                            ) : (
+                              <>
+                                <span className="font-medium">{item.canvasSize?.name || '-'}</span>
+                                <span className="text-muted-foreground"> - </span>
+                                <span>{item.frameOption?.name || 'Çerçevesiz'}</span>
+                              </>
+                            )}
+                            {item.quantity > 1 && <span className="text-muted-foreground"> (x{item.quantity})</span>}
+                          </div>
                         </div>
                         {item.title && <span className="text-muted-foreground text-xs">{item.title}</span>}
                       </div>

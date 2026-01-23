@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
             title: true,
             quantity: true,
             salePrice: true,
+            notes: true,
             canvasSize: { select: { name: true } },
             frameOption: { select: { name: true } },
           },
