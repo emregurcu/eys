@@ -15,29 +15,32 @@ export async function GET(req: NextRequest) {
     const canvasSizeId = searchParams.get('canvasSizeId');
     const include = searchParams.get('include') === 'true';
 
-    const variants = await prisma.canvasSizeVariant.findMany({
-      where: canvasSizeId ? { canvasSizeId } : undefined,
-      ...(include
-        ? {
-            include: {
-              canvasSize: true,
-              frameOption: true,
-            },
-          }
-        : {
-            select: {
-              id: true,
-              canvasSizeId: true,
-              frameOptionId: true,
-              totalCost: true,
-              isActive: true,
-            },
-          }),
-      orderBy: [
-        { canvasSize: { sortOrder: 'asc' } },
-        { frameOption: { sortOrder: 'asc' } },
-      ],
-    });
+    const variants = include
+      ? await prisma.canvasSizeVariant.findMany({
+          where: canvasSizeId ? { canvasSizeId } : undefined,
+          include: {
+            canvasSize: true,
+            frameOption: true,
+          },
+          orderBy: [
+            { canvasSize: { sortOrder: 'asc' } },
+            { frameOption: { sortOrder: 'asc' } },
+          ],
+        })
+      : await prisma.canvasSizeVariant.findMany({
+          where: canvasSizeId ? { canvasSizeId } : undefined,
+          select: {
+            id: true,
+            canvasSizeId: true,
+            frameOptionId: true,
+            totalCost: true,
+            isActive: true,
+          },
+          orderBy: [
+            { canvasSize: { sortOrder: 'asc' } },
+            { frameOption: { sortOrder: 'asc' } },
+          ],
+        });
 
     return NextResponse.json(variants);
   } catch (error) {

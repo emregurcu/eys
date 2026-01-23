@@ -15,30 +15,33 @@ export async function GET(req: NextRequest) {
     const canvasSizeId = searchParams.get('canvasSizeId');
     const include = searchParams.get('include') === 'true';
 
-    const rates = await prisma.sizeShippingRate.findMany({
-      where: canvasSizeId ? { canvasSizeId } : undefined,
-      ...(include
-        ? {
-            include: {
-              canvasSize: true,
-              country: true,
-            },
-          }
-        : {
-            select: {
-              id: true,
-              canvasSizeId: true,
-              countryId: true,
-              shippingCost: true,
-              estimatedDays: true,
-              isActive: true,
-            },
-          }),
-      orderBy: [
-        { canvasSize: { sortOrder: 'asc' } },
-        { country: { sortOrder: 'asc' } },
-      ],
-    });
+    const rates = include
+      ? await prisma.sizeShippingRate.findMany({
+          where: canvasSizeId ? { canvasSizeId } : undefined,
+          include: {
+            canvasSize: true,
+            country: true,
+          },
+          orderBy: [
+            { canvasSize: { sortOrder: 'asc' } },
+            { country: { sortOrder: 'asc' } },
+          ],
+        })
+      : await prisma.sizeShippingRate.findMany({
+          where: canvasSizeId ? { canvasSizeId } : undefined,
+          select: {
+            id: true,
+            canvasSizeId: true,
+            countryId: true,
+            shippingCost: true,
+            estimatedDays: true,
+            isActive: true,
+          },
+          orderBy: [
+            { canvasSize: { sortOrder: 'asc' } },
+            { country: { sortOrder: 'asc' } },
+          ],
+        });
 
     return NextResponse.json(rates);
   } catch (error: any) {
