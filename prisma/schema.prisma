@@ -1,0 +1,354 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// Kullanıcı rolleri
+enum Role {
+  ADMIN       // Sistem yöneticisi - tüm yetkiler
+  MANAGER     // Mağaza yöneticisi - atanan mağazalara erişim
+  PRODUCER    // Üretici - sipariş ve üretim takibi
+  VIEWER      // Sadece görüntüleme
+}
+
+// Sipariş durumları
+enum OrderStatus {
+  NEW           // Yeni sipariş
+  PROCESSING    // İşleniyor
+  PRODUCTION    // Üretimde
+  READY         // Hazır
+  SHIPPED       // Kargoya verildi
+  DELIVERED     // Teslim edildi
+  RETURNED      // İade edildi
+  CANCELLED     // İptal edildi
+  PROBLEM       // Problem var
+}
+
+// Sorun türleri
+enum IssueType {
+  SHIPPING      // Kargo problemi
+  RETURN        // İade
+  PRODUCT       // Ürün problemi
+  CUSTOMER      // Müşteri şikayeti
+  OTHER         // Diğer
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+// Kullanıcı
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  name          String
+  role          Role      @default(VIEWER)
+  avatar        String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  managedStores StoreManager[]
+  notifications Notification[]
+  pushSubscriptions PushSubscription[]
+  issues        Issue[]        @relation("AssignedIssues")
+  createdIssues Issue[]        @relation("CreatedIssues")
+  comments      IssueComment[]
+  activities    Activity[]
+}
+
+// Etsy Mağazası
+model Store {
+  id              String   @id @default(cuid())
+  etsyShopId      String   @unique
+  name            String
+  etsyApiKey      String?
+  etsyApiSecret   String?
+  etsyAccessToken String?
+  etsyRefreshToken String?
+  isActive        Boolean  @default(true)
+  currency        String   @default("USD")
+  // Etsy kesinti oranları (%)
+  etsyTransactionFee  Float @default(6.5)  // İşlem ücreti %
+  etsyPaymentFee      Float @default(4)    // Ödeme işleme ücreti %
+  etsyListingFee      Float @default(0.20) // Listeleme ücreti (sabit)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  managers      StoreManager[]
+  orders        Order[]
+  issues        Issue[]
+  finances      Finance[]
+  notifications Notification[]
+}
+
+// Mağaza-Yönetici ilişkisi
+model StoreManager {
+  id        String   @id @default(cuid())
+  storeId   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, userId])
+}
+
+// ============ KANVAS ÜRÜN YÖNETİMİ ============
+
+// Kanvas Boyutları (Admin tarafından yönetilir)
+model CanvasSize {
+  id        String   @id @default(cuid())
+  name      String   // Örn: "20x30 cm", "30x40 cm"
+  width     Int      // cm cinsinden genişlik
+  height    Int      // cm cinsinden yükseklik
+  baseCost  Float    // Temel maliyet (kanvas + baskı) - çerçevesiz fiyat
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  variants      CanvasSizeVariant[]
+  shippingRates SizeShippingRate[]
+  orderItems    OrderItem[]
+
+  @@unique([width, height])
+}
+
+// Çerçeve Türleri (Admin tarafından yönetilir)
+model FrameOption {
+  id        String   @id @default(cuid())
+  name      String   // Örn: "Çerçevesiz", "Siyah Çerçeve", "Beyaz Çerçeve"
+  code      String   @unique // Örn: "none", "black", "white", "wood"
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  variants   CanvasSizeVariant[]
+  orderItems OrderItem[]
+}
+
+// Boyut-Çerçeve Varyasyonları (Her boyut için çerçeve fiyatları)
+model CanvasSizeVariant {
+  id            String   @id @default(cuid())
+  canvasSizeId  String
+  frameOptionId String
+  totalCost     Float    // Bu kombinasyonun toplam maliyeti
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  canvasSize  CanvasSize  @relation(fields: [canvasSizeId], references: [id], onDelete: Cascade)
+  frameOption FrameOption @relation(fields: [frameOptionId], references: [id], onDelete: Cascade)
+
+  @@unique([canvasSizeId, frameOptionId])
+}
+
+// Ülkeler (Kargo için)
+model Country {
+  id           String   @id @default(cuid())
+  code         String   @unique // ISO ülke kodu: US, GB, DE, TR vb.
+  name         String   // Ülke adı
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  shippingRates SizeShippingRate[]
+  orders        Order[]
+}
+
+// Boyut Bazlı Kargo Fiyatları (Her boyut için her ülkeye özel kargo maliyeti)
+model SizeShippingRate {
+  id            String   @id @default(cuid())
+  canvasSizeId  String
+  countryId     String
+  shippingCost  Float    // Bu boyut için bu ülkeye kargo maliyeti
+  estimatedDays String?  // Tahmini teslimat süresi
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  canvasSize CanvasSize @relation(fields: [canvasSizeId], references: [id], onDelete: Cascade)
+  country    Country    @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  @@unique([canvasSizeId, countryId])
+}
+
+// ============ SİPARİŞ YÖNETİMİ ============
+
+// Sipariş
+model Order {
+  id              String      @id @default(cuid())
+  storeId         String
+  countryId       String?
+  etsyReceiptId   String?
+  etsyOrderId     String?
+  orderNumber     String
+  customerName    String
+  customerEmail   String?
+  shippingCountry String?     // Kargo ülkesi adı
+  shippingAddress String?
+  status          OrderStatus @default(NEW)
+  
+  // Fiyatlandırma
+  salePrice       Float       // Satış fiyatı (Etsy'den gelen)
+  saleCurrency    String      @default("USD")
+  
+  // Maliyet Hesaplaması
+  productCost     Float       @default(0) // Toplam ürün maliyeti
+  shippingCost    Float       @default(0) // Kargo maliyeti
+  etsyFees        Float       @default(0) // Etsy kesintileri
+  totalCost       Float       @default(0) // Toplam maliyet
+  netProfit       Float       @default(0) // Net kar (satış - toplam maliyet)
+  profitMargin    Float       @default(0) // Kar marjı %
+  
+  // Kargo takip
+  trackingNumber  String?
+  trackingCompany String?
+  
+  notes           String?
+  orderDate       DateTime
+  shippedDate     DateTime?
+  deliveredDate   DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  store   Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  country Country? @relation(fields: [countryId], references: [id])
+  items   OrderItem[]
+  issues  Issue[]
+
+  @@unique([storeId, etsyReceiptId])
+}
+
+// Sipariş Ürünleri (Kanvas detayları ile)
+model OrderItem {
+  id           String  @id @default(cuid())
+  orderId      String
+  canvasSizeId String?
+  frameOptionId String?
+  
+  title        String  // Ürün başlığı
+  quantity     Int
+  salePrice    Float   // Birim satış fiyatı
+  
+  // Maliyet detayları
+  canvasCost   Float   @default(0) // Kanvas maliyeti
+  frameCost    Float   @default(0) // Çerçeve maliyeti
+  totalCost    Float   @default(0) // Toplam maliyet (quantity dahil)
+  
+  customWidth  Int?    // Özel boyut genişlik
+  customHeight Int?    // Özel boyut yükseklik
+  notes        String?
+
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  canvasSize  CanvasSize?  @relation(fields: [canvasSizeId], references: [id])
+  frameOption FrameOption? @relation(fields: [frameOptionId], references: [id])
+}
+
+// ============ SORUN TAKİBİ ============
+
+model Issue {
+  id          String      @id @default(cuid())
+  storeId     String
+  orderId     String?
+  type        IssueType
+  status      IssueStatus @default(OPEN)
+  title       String
+  description String?
+  priority    Int         @default(1)
+  assignedTo  String?
+  createdBy   String
+  resolvedAt  DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  store      Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  order      Order?         @relation(fields: [orderId], references: [id])
+  assignee   User?          @relation("AssignedIssues", fields: [assignedTo], references: [id])
+  creator    User           @relation("CreatedIssues", fields: [createdBy], references: [id])
+  comments   IssueComment[]
+}
+
+model IssueComment {
+  id        String   @id @default(cuid())
+  issueId   String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id])
+}
+
+// ============ FİNANS ============
+
+model Finance {
+  id          String   @id @default(cuid())
+  storeId     String
+  orderId     String?  // İlişkili sipariş
+  type        String   // income, expense, refund
+  category    String   // sale, shipping, etsy_fee, material, other
+  amount      Float
+  currency    String   @default("USD")
+  description String?
+  date        DateTime
+  createdAt   DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+// ============ BİLDİRİMLER & LOG ============
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  storeId   String?
+  type      String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  data      Json?
+  createdAt DateTime @default(now())
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store Store? @relation(fields: [storeId], references: [id])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, endpoint])
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  entity    String
+  entityId  String
+  data      Json?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
