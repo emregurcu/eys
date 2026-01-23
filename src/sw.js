@@ -1,3 +1,7 @@
+import { precacheAndRoute } from 'workbox-precaching';
+
+precacheAndRoute(self.__WB_MANIFEST || []);
+
 self.addEventListener('push', (event) => {
   let data = {};
   try {
@@ -21,5 +25,3 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(clients.openWindow(url));
 });
 
-// Workbox inject manifest placeholder
-self.__WB_MANIFEST;
