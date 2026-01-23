@@ -186,6 +186,12 @@ function extractOrderNumber(body, subject) {
  * Müşteri adını çıkar - Shipping address altındaki ilk satır
  */
 function extractCustomerName(body) {
+  // HTML span'dan isim çıkar: <span class='name'>Julie Mortensen</span>
+  const htmlNameMatch = body.match(/<span class=['"]name['"]>([^<]+)<\/span>/i);
+  if (htmlNameMatch) {
+    return htmlNameMatch[1].trim();
+  }
+  
   // "Shipping address" altındaki isim - çeşitli formatlar
   const patterns = [
     /Shipping address\s*\n([A-Za-z][A-Za-z\s\-\.]+)/i,
@@ -227,6 +233,30 @@ function extractCustomerName(body) {
  * Teslimat adresini çıkar - Tam adres bloğu
  */
 function extractShippingAddress(body) {
+  // HTML span'lardan adres çıkar
+  const name = body.match(/<span class=['"]name['"]>([^<]+)<\/span>/i);
+  const firstLine = body.match(/<span class=['"]first-line['"]>([^<]+)<\/span>/i);
+  const city = body.match(/<span class=['"]city['"]>([^<]+)<\/span>/i);
+  const state = body.match(/<span class=['"]state['"]>([^<]+)<\/span>/i);
+  const zip = body.match(/<span class=['"]zip['"]>([^<]+)<\/span>/i);
+  const country = body.match(/<span class=['"]country-name['"]>([^<]+)<\/span>/i);
+  
+  if (firstLine || city) {
+    const parts = [];
+    if (name) parts.push(name[1].trim());
+    if (firstLine) parts.push(firstLine[1].trim());
+    if (city && state && zip) {
+      parts.push(`${city[1].trim()}, ${state[1].trim()} ${zip[1].trim()}`);
+    } else if (city) {
+      parts.push(city[1].trim());
+    }
+    if (country) parts.push(country[1].trim());
+    
+    if (parts.length > 0) {
+      return parts.join(', ');
+    }
+  }
+  
   // Shipping address bloğunu bul - farklı formatlar
   const patterns = [
     /Shipping address\s*\n([\s\S]*?)(?=\n\n|USPS|Learn more|Shipping internationally)/i,
@@ -238,7 +268,7 @@ function extractShippingAddress(body) {
     if (match) {
       const addressLines = match[1].trim().split('\n').filter(line => {
         const trimmed = line.trim();
-        return trimmed && !trimmed.toLowerCase().includes('shipping address');
+        return trimmed && !trimmed.toLowerCase().includes('shipping address') && !trimmed.includes('<');
       });
       if (addressLines.length > 0) {
         return addressLines.join(', ');
