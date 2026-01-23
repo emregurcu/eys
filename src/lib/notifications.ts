@@ -63,10 +63,10 @@ export async function notifyStoreManagers(
     });
 
     // Benzersiz kullanıcı listesi
-    const userIds = [...new Set([
-      ...managers.map(m => m.userId),
-      ...admins.map(a => a.id),
-    ])];
+    const userIdSet = new Set<string>();
+    managers.forEach(m => userIdSet.add(m.userId));
+    admins.forEach(a => userIdSet.add(a.id));
+    const userIds = Array.from(userIdSet);
 
     // Bildirimleri oluştur
     const notifications = await prisma.notification.createMany({
@@ -153,7 +153,7 @@ export async function notifyNewOrder(order: any) {
   // Email bildirim - Admin'lere gönder
   try {
     const admins = await prisma.user.findMany({
-      where: { role: 'ADMIN', isActive: true, email: { not: null } },
+      where: { role: 'ADMIN', isActive: true, email: { not: '' } },
       select: { email: true },
     });
     
@@ -193,7 +193,7 @@ export async function notifyOrderStatusChange(order: any, newStatus: string) {
   if (['SHIPPED', 'DELIVERED', 'PROBLEM'].includes(newStatus)) {
     try {
       const admins = await prisma.user.findMany({
-        where: { role: 'ADMIN', isActive: true, email: { not: null } },
+        where: { role: 'ADMIN', isActive: true, email: { not: '' } },
         select: { email: true },
       });
       
@@ -225,7 +225,7 @@ export async function notifyIssueCreated(issue: any) {
   if (issue.priority >= 3) {
     try {
       const admins = await prisma.user.findMany({
-        where: { role: 'ADMIN', isActive: true, email: { not: null } },
+        where: { role: 'ADMIN', isActive: true, email: { not: '' } },
         select: { email: true },
       });
       
