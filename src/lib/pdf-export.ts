@@ -1,6 +1,20 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+// Türkçe karakterleri PDF uyumlu karakterlere çevir
+function fixTurkishChars(text: string): string {
+  if (!text) return text;
+  const map: { [key: string]: string } = {
+    'ğ': 'g', 'Ğ': 'G',
+    'ü': 'u', 'Ü': 'U',
+    'ş': 's', 'Ş': 'S',
+    'ı': 'i', 'İ': 'I',
+    'ö': 'o', 'Ö': 'O',
+    'ç': 'c', 'Ç': 'C',
+  };
+  return text.replace(/[ğĞüÜşŞıİöÖçÇ]/g, (char) => map[char] || char);
+}
+
 interface Order {
   id: string;
   orderNumber: string;
@@ -60,9 +74,9 @@ export function exportSingleOrderPDF(order: Order) {
     y += 8;
   };
   
-  addRow('Magaza:', order.store?.name || '-');
-  addRow('Musteri:', order.customerName);
-  addRow('Ulke:', order.country?.name || order.shippingCountry || '-');
+  addRow('Magaza:', fixTurkishChars(order.store?.name || '-'));
+  addRow('Musteri:', fixTurkishChars(order.customerName));
+  addRow('Ulke:', fixTurkishChars(order.country?.name || order.shippingCountry || '-'));
   addRow('Tarih:', new Date(order.orderDate).toLocaleDateString('tr-TR'));
   
   y += 5;
@@ -107,8 +121,8 @@ export function exportSingleOrderPDF(order: Order) {
   
   if (order.items && order.items.length > 0) {
     const productInfo = order.items.map(item => {
-      const size = item.canvasSize?.name || '-';
-      const frame = item.frameOption?.name || 'Cercevesiz';
+      const size = fixTurkishChars(item.canvasSize?.name || '-');
+      const frame = fixTurkishChars(item.frameOption?.name || 'Cercevesiz');
       return `${size} - ${frame} (x${item.quantity})`;
     }).join(', ');
     
@@ -131,7 +145,7 @@ export function exportSingleOrderPDF(order: Order) {
   doc.setFontSize(11);
   
   if (order.shippingAddress) {
-    const addressLines = doc.splitTextToSize(order.shippingAddress, pageWidth - 28);
+    const addressLines = doc.splitTextToSize(fixTurkishChars(order.shippingAddress), pageWidth - 28);
     doc.text(addressLines, 14, y);
     y += addressLines.length * 6 + 10;
   } else {
@@ -145,7 +159,7 @@ export function exportSingleOrderPDF(order: Order) {
     doc.text('Notlar:', 14, y);
     y += 6;
     doc.setFont('helvetica', 'normal');
-    const noteLines = doc.splitTextToSize(order.notes, pageWidth - 28);
+    const noteLines = doc.splitTextToSize(fixTurkishChars(order.notes), pageWidth - 28);
     doc.text(noteLines, 14, y);
   }
   
@@ -186,12 +200,12 @@ export function exportOrderListPDF(orders: Order[], title: string = 'Siparis Lis
       'Tarih',
     ]],
     body: orders.map(order => {
-      // Ürün bilgisi
+      // Ürün bilgisi - Türkçe karakterleri düzelt
       let productInfo = '-';
       if (order.items && order.items.length > 0) {
         productInfo = order.items.map(item => {
-          const size = item.canvasSize?.name || '-';
-          const frame = item.frameOption?.name || 'Cercevesiz';
+          const size = fixTurkishChars(item.canvasSize?.name || '-');
+          const frame = fixTurkishChars(item.frameOption?.name || 'Cercevesiz');
           return `${size} - ${frame} (x${item.quantity})`;
         }).join('\n');
       }
@@ -209,10 +223,10 @@ export function exportOrderListPDF(orders: Order[], title: string = 'Siparis Lis
       return [
         imageStatus,
         order.orderNumber,
-        order.store?.name || '-',
-        order.customerName,
+        fixTurkishChars(order.store?.name || '-'),
+        fixTurkishChars(order.customerName),
         productInfo,
-        order.shippingAddress || '-',
+        fixTurkishChars(order.shippingAddress || '-'),
         new Date(order.orderDate).toLocaleDateString('tr-TR'),
       ];
     }),
@@ -228,26 +242,42 @@ export function exportOrderListPDF(orders: Order[], title: string = 'Siparis Lis
       6: { cellWidth: 22 },
     },
     didParseCell: function (data: any) {
+      // Görsel kolonunda metni gizle (görsel eklenecek)
+      if (data.column.index === 0 && data.row.raw[0] === 'Var (Yuklenen)') {
+        data.cell.text = [];
+      }
+    },
+    didDrawCell: function (data: any) {
       // İlk kolonda (görsel) ve base64 görsel varsa ekle
       if (data.column.index === 0 && data.row.raw[0] === 'Var (Yuklenen)') {
         const order = orders[data.row.index];
         if (order.imageUrl && order.imageUrl.startsWith('data:image/')) {
           try {
-            const imgWidth = 20;
-            const imgHeight = 20;
-            const x = data.cell.x + 2;
-            const y = data.cell.y + 2;
+            const imgWidth = 18;
+            const imgHeight = 18;
+            // Hücre merkezine yerleştir - koordinatları doğru al
+            const cellX = data.cell.x;
+            const cellY = data.cell.y;
+            const cellWidth = data.cell.width;
+            const cellHeight = data.cell.height;
+            
+            // Hücre içinde ortala
+            const x = cellX + Math.max(1, (cellWidth - imgWidth) / 2);
+            const y = cellY + Math.max(1, (cellHeight - imgHeight) / 2);
             
             let format = 'JPEG';
             if (order.imageUrl.includes('data:image/png')) format = 'PNG';
             else if (order.imageUrl.includes('data:image/jpeg') || order.imageUrl.includes('data:image/jpg')) format = 'JPEG';
             
-            doc.addImage(order.imageUrl, format, x, y, imgWidth, imgHeight);
-            // Hücre içeriğini temizle (görsel gösterilecek)
-            data.cell.text = [];
+            // Sayfa sınırlarını kontrol et
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const pageWidth = doc.internal.pageSize.getWidth();
+            
+            if (y + imgHeight <= pageHeight && x + imgWidth <= pageWidth && y >= 0 && x >= 0) {
+              doc.addImage(order.imageUrl, format, x, y, imgWidth, imgHeight);
+            }
           } catch (error) {
             console.error('PDF görsel hatası:', error);
-            data.cell.text = ['Hata'];
           }
         }
       }
