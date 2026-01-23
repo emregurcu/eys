@@ -67,6 +67,39 @@ export function exportSingleOrderPDF(order: Order) {
   
   y += 5;
   
+  // Ürün Görseli
+  if (order.imageUrl) {
+    try {
+      // Data URL kontrolü (base64 görseller)
+      if (order.imageUrl.startsWith('data:image/')) {
+        const imgData = order.imageUrl;
+        const imgWidth = 80;
+        const imgHeight = (imgWidth * 3) / 4; // 4:3 oran
+        
+        // Format belirleme
+        let format = 'JPEG';
+        if (imgData.includes('data:image/png')) format = 'PNG';
+        else if (imgData.includes('data:image/jpeg') || imgData.includes('data:image/jpg')) format = 'JPEG';
+        
+        doc.addImage(imgData, format, pageWidth / 2 - imgWidth / 2, y, imgWidth, imgHeight);
+        y += imgHeight + 10;
+      } else {
+        // Normal URL - Not ekle
+        doc.setFont('helvetica', 'bold');
+        doc.text('Gorsel URL:', 14, y);
+        doc.setFont('helvetica', 'normal');
+        const urlLines = doc.splitTextToSize(order.imageUrl.substring(0, 60) + '...', pageWidth - 28);
+        doc.text(urlLines, 55, y);
+        y += urlLines.length * 6 + 5;
+      }
+    } catch (error) {
+      // Görsel yüklenemezse devam et
+      console.error('PDF görsel hatası:', error);
+    }
+  }
+  
+  y += 5;
+  
   // Ürün Bilgisi - Boyut ve Çerçeve
   doc.setFont('helvetica', 'bold');
   doc.text('Urun:', 14, y);
@@ -140,10 +173,11 @@ export function exportOrderListPDF(orders: Order[], title: string = 'Siparis Lis
   doc.setFont('helvetica', 'normal');
   doc.text(`Toplam: ${orders.length} siparis | Tarih: ${new Date().toLocaleDateString('tr-TR')}`, pageWidth / 2, 22, { align: 'center' });
   
-  // Tablo - Maliyet ve kar bilgileri kaldırıldı
+  // Tablo - Görsel kolonu eklendi
   autoTable(doc, {
     startY: 30,
     head: [[
+      'Gorsel',
       'Siparis No',
       'Magaza',
       'Musteri',
@@ -162,7 +196,18 @@ export function exportOrderListPDF(orders: Order[], title: string = 'Siparis Lis
         }).join('\n');
       }
       
+      // Görsel durumu
+      let imageStatus = 'Yok';
+      if (order.imageUrl) {
+        if (order.imageUrl.startsWith('data:')) {
+          imageStatus = 'Var (Yuklenen)';
+        } else {
+          imageStatus = 'Var (URL)';
+        }
+      }
+      
       return [
+        imageStatus,
         order.orderNumber,
         order.store?.name || '-',
         order.customerName,
@@ -174,12 +219,38 @@ export function exportOrderListPDF(orders: Order[], title: string = 'Siparis Lis
     styles: { fontSize: 8, cellPadding: 3 },
     headStyles: { fillColor: [66, 66, 66], fontSize: 9 },
     columnStyles: {
-      0: { cellWidth: 28 },
-      1: { cellWidth: 30 },
-      2: { cellWidth: 35 },
-      3: { cellWidth: 50 },
-      4: { cellWidth: 80 },
-      5: { cellWidth: 22 },
+      0: { cellWidth: 25 },
+      1: { cellWidth: 28 },
+      2: { cellWidth: 30 },
+      3: { cellWidth: 35 },
+      4: { cellWidth: 50 },
+      5: { cellWidth: 80 },
+      6: { cellWidth: 22 },
+    },
+    didParseCell: function (data: any) {
+      // İlk kolonda (görsel) ve base64 görsel varsa ekle
+      if (data.column.index === 0 && data.row.raw[0] === 'Var (Yuklenen)') {
+        const order = orders[data.row.index];
+        if (order.imageUrl && order.imageUrl.startsWith('data:image/')) {
+          try {
+            const imgWidth = 20;
+            const imgHeight = 20;
+            const x = data.cell.x + 2;
+            const y = data.cell.y + 2;
+            
+            let format = 'JPEG';
+            if (order.imageUrl.includes('data:image/png')) format = 'PNG';
+            else if (order.imageUrl.includes('data:image/jpeg') || order.imageUrl.includes('data:image/jpg')) format = 'JPEG';
+            
+            doc.addImage(order.imageUrl, format, x, y, imgWidth, imgHeight);
+            // Hücre içeriğini temizle (görsel gösterilecek)
+            data.cell.text = [];
+          } catch (error) {
+            console.error('PDF görsel hatası:', error);
+            data.cell.text = ['Hata'];
+          }
+        }
+      }
     },
   });
   

@@ -763,6 +763,7 @@ export default function OrdersPage() {
                       onCheckedChange={toggleSelectAll}
                     />
                   </th>
+                  <th className="text-left p-4 font-medium w-20">Görsel</th>
                   <th className="text-left p-4 font-medium">Sipariş</th>
                   <th className="text-left p-4 font-medium hidden sm:table-cell">Tarih</th>
                   <th className="text-left p-4 font-medium hidden md:table-cell">Ürün</th>
@@ -780,6 +781,8 @@ export default function OrdersPage() {
                   // Skeleton loading
                   [...Array(5)].map((_, i) => (
                     <tr key={i} className="border-b">
+                      <td className="p-4"><div className="h-4 bg-muted rounded animate-pulse w-6" /></td>
+                      <td className="p-2"><div className="h-16 w-16 bg-muted rounded animate-pulse" /></td>
                       <td className="p-4"><div className="h-4 bg-muted rounded animate-pulse w-24" /></td>
                       <td className="p-4 hidden sm:table-cell"><div className="h-4 bg-muted rounded animate-pulse w-20" /></td>
                       <td className="p-4 hidden md:table-cell"><div className="h-4 bg-muted rounded animate-pulse w-32" /></td>
@@ -799,6 +802,25 @@ export default function OrdersPage() {
                         checked={selectedOrders.has(order.id)}
                         onCheckedChange={() => toggleOrderSelection(order.id)}
                       />
+                    </td>
+                    <td className="p-2">
+                      {order.imageUrl ? (
+                        <div className="w-16 h-16 border rounded overflow-hidden bg-muted/20">
+                          <img 
+                            src={order.imageUrl} 
+                            alt="Ürün görseli" 
+                            className="w-full h-full object-cover cursor-pointer hover:opacity-80"
+                            onClick={() => setSelectedOrder(order)}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-16 h-16 border rounded flex items-center justify-center bg-muted/20">
+                          <Image className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                      )}
                     </td>
                     <td className="p-4">
                       <p className="font-medium">{order.orderNumber}</p>
@@ -1014,29 +1036,40 @@ export default function OrdersPage() {
               </div>
 
               {/* Ürün Görseli */}
-              {selectedOrder.imageUrl && (
-                <div>
-                  <h4 className="font-medium mb-2">Ürün Görseli</h4>
+              <div>
+                <h4 className="font-medium mb-2">Ürün Görseli</h4>
+                {selectedOrder.imageUrl ? (
                   <div className="border rounded-lg overflow-hidden">
                     <img 
                       src={selectedOrder.imageUrl} 
                       alt="Ürün görseli" 
-                      className="max-w-full max-h-64 object-contain mx-auto"
+                      className="max-w-full max-h-96 object-contain mx-auto bg-muted/20"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = 'none';
+                        const parent = (e.target as HTMLImageElement).parentElement;
+                        if (parent) {
+                          parent.innerHTML = '<p class="text-center text-muted-foreground p-4">Görsel yüklenemedi</p>';
+                        }
                       }}
                     />
-                    <a 
-                      href={selectedOrder.imageUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="block text-center text-sm text-primary p-2 hover:underline"
-                    >
-                      Görseli Aç
-                    </a>
+                    {!selectedOrder.imageUrl.startsWith('data:') && (
+                      <a 
+                        href={selectedOrder.imageUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="block text-center text-sm text-primary p-2 hover:underline"
+                      >
+                        Görseli Aç
+                      </a>
+                    )}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="border rounded-lg p-8 text-center text-muted-foreground bg-muted/20">
+                    <Image className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                    <p>Görsel eklenmemiş</p>
+                  </div>
+                )}
+              </div>
 
               {/* Durum Güncelleme */}
               <div className="flex gap-2 pt-4 border-t">
