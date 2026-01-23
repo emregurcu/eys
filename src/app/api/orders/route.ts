@@ -84,6 +84,7 @@ export async function POST(req: NextRequest) {
       saleCurrency,
       orderDate,
       notes,
+      imageUrl,
       items,
     } = body;
 
@@ -200,6 +201,7 @@ export async function POST(req: NextRequest) {
         profitMargin,
         orderDate: new Date(orderDate),
         notes: notes || null,
+        imageUrl: imageUrl || null,
         items: {
           create: processedItems,
         },

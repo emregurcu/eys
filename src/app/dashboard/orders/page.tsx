@@ -34,6 +34,9 @@ import {
   TrendingUp,
   TrendingDown,
   Calculator,
+  FileDown,
+  Image,
+  Link,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -42,6 +45,7 @@ import {
   formatCurrency,
   formatDate,
 } from '@/lib/utils';
+import { exportSingleOrderPDF, exportOrderListPDF } from '@/lib/pdf-export';
 
 interface Order {
   id: string;
@@ -60,6 +64,9 @@ interface Order {
   netProfit: number;
   profitMargin: number;
   trackingNumber?: string | null;
+  trackingCompany?: string | null;
+  imageUrl?: string | null;
+  notes?: string | null;
   orderDate: string;
   store: { id: string; name: string };
   country: { name: string; code: string } | null;
@@ -141,6 +148,7 @@ export default function OrdersPage() {
     saleCurrency: 'USD',
     orderDate: new Date().toISOString().split('T')[0],
     notes: '',
+    imageUrl: '',
     items: [{ canvasSizeId: '', frameOptionId: '', title: '', quantity: 1, salePrice: '' }],
   });
 
@@ -354,6 +362,7 @@ export default function OrdersPage() {
           saleCurrency: 'USD',
           orderDate: new Date().toISOString().split('T')[0],
           notes: '',
+          imageUrl: '',
           items: [{ canvasSizeId: '', frameOptionId: '', title: '', quantity: 1, salePrice: '' }],
         });
         fetchOrders();
@@ -417,9 +426,23 @@ export default function OrdersPage() {
             </span>
           </p>
         </div>
-        <Button onClick={() => setShowAddDialog(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Yeni Sipariş
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => exportOrderListPDF(
+              filteredOrders as any, 
+              storeFilter !== 'all' 
+                ? `${stores.find(s => s.id === storeFilter)?.name || 'Mağaza'} Siparişleri`
+                : 'Tüm Siparişler'
+            )}
+            disabled={filteredOrders.length === 0}
+          >
+            <FileDown className="mr-2 h-4 w-4" /> PDF
+          </Button>
+          <Button onClick={() => setShowAddDialog(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Yeni Sipariş
+          </Button>
+        </div>
       </div>
 
       {/* Filtreler */}
@@ -556,6 +579,10 @@ export default function OrdersPage() {
                             <Eye className="mr-2 h-4 w-4" />
                             Detay
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => exportSingleOrderPDF(order as any)}>
+                            <FileDown className="mr-2 h-4 w-4" />
+                            PDF İndir
+                          </DropdownMenuItem>
                           <DropdownMenuItem>
                             <Truck className="mr-2 h-4 w-4" />
                             Kargo Ekle
@@ -669,6 +696,31 @@ export default function OrdersPage() {
                 )}
               </div>
 
+              {/* Ürün Görseli */}
+              {selectedOrder.imageUrl && (
+                <div>
+                  <h4 className="font-medium mb-2">Ürün Görseli</h4>
+                  <div className="border rounded-lg overflow-hidden">
+                    <img 
+                      src={selectedOrder.imageUrl} 
+                      alt="Ürün görseli" 
+                      className="max-w-full max-h-64 object-contain mx-auto"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                    <a 
+                      href={selectedOrder.imageUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="block text-center text-sm text-primary p-2 hover:underline"
+                    >
+                      Görseli Aç
+                    </a>
+                  </div>
+                </div>
+              )}
+
               {/* Durum Güncelleme */}
               <div className="flex gap-2 pt-4 border-t">
                 <Select 
@@ -688,6 +740,12 @@ export default function OrdersPage() {
                     <SelectItem value="PROBLEM">Problem</SelectItem>
                   </SelectContent>
                 </Select>
+                <Button 
+                  variant="outline" 
+                  onClick={() => exportSingleOrderPDF(selectedOrder as any)}
+                >
+                  <FileDown className="mr-2 h-4 w-4" /> PDF İndir
+                </Button>
               </div>
             </div>
           )}
@@ -768,6 +826,37 @@ export default function OrdersPage() {
                   onChange={(e) => setOrderForm({ ...orderForm, orderDate: e.target.value })}
                 />
               </div>
+            </div>
+
+            {/* Ürün Görseli */}
+            <div className="border rounded-lg p-4 space-y-3 bg-muted/20">
+              <div className="flex items-center gap-2">
+                <Image className="h-4 w-4" />
+                <label className="text-sm font-medium">Ürün Görseli (Opsiyonel)</label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Link className="h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Görsel URL'si yapıştırın (Etsy, Google Drive, vb.)"
+                  value={orderForm.imageUrl}
+                  onChange={(e) => setOrderForm({ ...orderForm, imageUrl: e.target.value })}
+                />
+              </div>
+              {orderForm.imageUrl && (
+                <div className="border rounded bg-background p-2">
+                  <img 
+                    src={orderForm.imageUrl} 
+                    alt="Önizleme" 
+                    className="max-h-40 object-contain mx-auto"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Etsy sipariş görselini buraya ekleyebilirsiniz. Google Drive, Dropbox veya direkt görsel linki kullanabilirsiniz.
+              </p>
             </div>
 
             {/* Ürünler */}

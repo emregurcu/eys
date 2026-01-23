@@ -218,6 +218,9 @@ model Order {
   trackingNumber  String?
   trackingCompany String?
   
+  // Ürün görseli
+  imageUrl        String?   // Görsel linki veya yüklenen görsel URL'i
+  
   notes           String?
   orderDate       DateTime
   shippedDate     DateTime?
