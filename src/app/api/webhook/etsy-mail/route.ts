@@ -19,13 +19,24 @@ interface EtsyMailData {
     title: string;
     quantity: number;
     price: number;
-    variation?: string;
+    dimensions?: string;
+    frameOption?: string;
   }>;
   totalPrice: number;
+  itemPrice?: number;
   currency?: string;
   orderDate?: string;
+  productTitle?: string;
+  dimensions?: string;
+  frameOption?: string;
+  quantity?: number;
+  shopName?: string;
+  transactionId?: string;
+  discount?: number;
+  shippingCost?: number;
+  salesTax?: number;
+  etsyOrderUrl?: string;
   rawSubject?: string;
-  rawBody?: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -67,13 +78,17 @@ export async function POST(req: NextRequest) {
             userId: admin.id,
             type: 'NEW_ORDER',
             title: 'Yeni Etsy Siparişi (Mail)',
-            message: `${data.customerName} - ${data.orderNumber} ($${data.totalPrice})`,
+            message: `${data.customerName} - ${data.orderNumber} ($${data.totalPrice})${data.dimensions ? ` - ${data.dimensions}` : ''}`,
             data: {
               source: 'email',
               orderNumber: data.orderNumber,
               customerName: data.customerName,
               totalPrice: data.totalPrice,
               storeEmail: data.storeEmail,
+              productTitle: data.productTitle,
+              dimensions: data.dimensions,
+              frameOption: data.frameOption,
+              shippingAddress: data.shippingAddress,
             },
           },
         });
@@ -102,6 +117,18 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Build notes with all available info
+    const noteParts = ['Mail ile eklendi.'];
+    if (data.productTitle) noteParts.push(`Ürün: ${data.productTitle}`);
+    if (data.dimensions) noteParts.push(`Boyut: ${data.dimensions}`);
+    if (data.frameOption) noteParts.push(`Çerçeve: ${data.frameOption}`);
+    if (data.shopName) noteParts.push(`Mağaza: ${data.shopName}`);
+    if (data.transactionId) noteParts.push(`Transaction: ${data.transactionId}`);
+    if (data.itemPrice && data.discount) noteParts.push(`Liste Fiyatı: $${data.itemPrice}, İndirim: $${data.discount}`);
+    if (data.shippingCost) noteParts.push(`Kargo: $${data.shippingCost}`);
+    if (data.salesTax) noteParts.push(`Vergi: $${data.salesTax}`);
+    if (data.etsyOrderUrl) noteParts.push(`Etsy: ${data.etsyOrderUrl}`);
+
     // Create new order
     const order = await prisma.order.create({
       data: {
@@ -114,27 +141,43 @@ export async function POST(req: NextRequest) {
         salePrice: data.totalPrice,
         saleCurrency: data.currency || 'USD',
         orderDate: data.orderDate ? new Date(data.orderDate) : new Date(),
-        notes: `Mail ile eklendi. ${data.rawSubject || ''}`,
+        notes: noteParts.join('\n'),
+        imageUrl: data.etsyOrderUrl || null,
         items: data.items && data.items.length > 0 ? {
           create: data.items.map(item => ({
-            title: item.title,
-            quantity: item.quantity,
-            salePrice: item.price,
+            title: item.title || data.productTitle || 'Canvas Print',
+            quantity: item.quantity || data.quantity || 1,
+            salePrice: item.price || data.itemPrice || data.totalPrice,
           })),
-        } : undefined,
+        } : {
+          create: [{
+            title: data.productTitle || 'Canvas Print',
+            quantity: data.quantity || 1,
+            salePrice: data.itemPrice || data.totalPrice,
+          }],
+        },
       },
       include: {
         store: { select: { name: true } },
       },
     });
 
-    // Send notification
+    // Send notification with more details
+    const notificationMsg = `${data.customerName} - ${data.orderNumber} ($${data.totalPrice})${data.dimensions ? ` - ${data.dimensions}` : ''}${data.frameOption ? ` - ${data.frameOption}` : ''}`;
+    
     await notifyStoreManagers(
       store.id,
       'NEW_ORDER',
       'Yeni Etsy Siparişi (Mail)',
-      `${data.customerName} - ${data.orderNumber} ($${data.totalPrice})`,
-      { orderId: order.id, orderNumber: order.orderNumber, source: 'email' }
+      notificationMsg,
+      { 
+        orderId: order.id, 
+        orderNumber: order.orderNumber, 
+        source: 'email',
+        dimensions: data.dimensions,
+        frameOption: data.frameOption,
+        shippingAddress: data.shippingAddress,
+      }
     );
 
     return NextResponse.json({ 

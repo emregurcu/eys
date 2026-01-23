@@ -85,6 +85,7 @@ function processEtsyEmails() {
 function parseEtsyEmail(message) {
   const subject = message.getSubject();
   const body = message.getPlainBody();
+  const htmlBody = message.getBody();
   const to = message.getTo();
   
   // "You made a sale" kontrolü
@@ -98,13 +99,23 @@ function parseEtsyEmail(message) {
     storeEmail: extractStoreEmail(to),
     orderNumber: extractOrderNumber(body, subject),
     customerName: extractCustomerName(body),
-    customerEmail: extractCustomerEmail(body),
     shippingAddress: extractShippingAddress(body),
     shippingCountry: extractCountry(body),
-    totalPrice: extractPrice(body, subject),
+    totalPrice: extractOrderTotal(body, subject),
+    itemPrice: extractItemPrice(body),
     currency: 'USD',
     orderDate: message.getDate().toISOString(),
     items: extractItems(body),
+    productTitle: extractProductTitle(body),
+    dimensions: extractDimensions(body),
+    frameOption: extractFrameOption(body),
+    quantity: extractQuantity(body),
+    shopName: extractShopName(body),
+    transactionId: extractTransactionId(body),
+    discount: extractDiscount(body),
+    shippingCost: extractShippingCost(body),
+    salesTax: extractSalesTax(body),
+    etsyOrderUrl: extractEtsyOrderUrl(body, htmlBody),
     rawSubject: subject,
   };
   
@@ -122,12 +133,23 @@ function parseEtsyEmail(message) {
  * Sipariş numarasını çıkar
  */
 function extractOrderNumber(body, subject) {
-  // Etsy sipariş numarası genellikle #1234567890 formatında
+  // Subject'ten: [$66.97, Order #3951008900]
+  const subjectMatch = subject.match(/Order\s*#?(\d{9,12})/i);
+  if (subjectMatch) {
+    return subjectMatch[1];
+  }
+  
+  // Body'den: Your order number is 3951008900
+  const bodyMatch = body.match(/order number is[:\s]*(\d{9,12})/i);
+  if (bodyMatch) {
+    return bodyMatch[1];
+  }
+  
+  // Genel pattern
   const patterns = [
     /Order\s*#?\s*(\d{9,12})/i,
     /Receipt\s*#?\s*(\d{9,12})/i,
     /#(\d{9,12})/,
-    /(\d{10,12})/,
   ];
   
   for (const pattern of patterns) {
@@ -142,19 +164,23 @@ function extractOrderNumber(body, subject) {
 
 
 /**
- * Müşteri adını çıkar
+ * Müşteri adını çıkar - Shipping address altındaki ilk satır
  */
 function extractCustomerName(body) {
+  // "Shipping address" altındaki isim
   const patterns = [
-    /Ship to[:\s]+([A-Za-z\s]+?)(?:\n|,)/i,
-    /Buyer[:\s]+([A-Za-z\s]+?)(?:\n|,)/i,
-    /sold to[:\s]+([A-Za-z\s]+?)(?:\n|,)/i,
+    /Shipping address\s*\n([A-Za-z\s\-\.]+)\n/i,
+    /Ship to[:\s]*\n?([A-Za-z\s\-\.]+)/i,
   ];
   
   for (const pattern of patterns) {
     const match = body.match(pattern);
     if (match) {
-      return match[1].trim();
+      const name = match[1].trim();
+      // Eğer adres gibi görünüyorsa atla
+      if (!name.match(/^\d/) && name.length > 2) {
+        return name;
+      }
     }
   }
   
@@ -163,29 +189,15 @@ function extractCustomerName(body) {
 
 
 /**
- * Müşteri emailini çıkar
- */
-function extractCustomerEmail(body) {
-  const emailPattern = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/;
-  const match = body.match(emailPattern);
-  return match ? match[1] : null;
-}
-
-
-/**
- * Teslimat adresini çıkar
+ * Teslimat adresini çıkar - Tam adres bloğu
  */
 function extractShippingAddress(body) {
-  const patterns = [
-    /Ship to[:\s]+([\s\S]*?)(?=\n\n|\nItem|$)/i,
-    /Shipping address[:\s]+([\s\S]*?)(?=\n\n|\nItem|$)/i,
-  ];
+  // Shipping address bloğunu bul
+  const match = body.match(/Shipping address\s*\n([\s\S]*?)(?=\n\n|USPS|Learn more|Shipping internationally)/i);
   
-  for (const pattern of patterns) {
-    const match = body.match(pattern);
-    if (match) {
-      return match[1].trim().replace(/\n+/g, ', ');
-    }
+  if (match) {
+    const addressLines = match[1].trim().split('\n').filter(line => line.trim());
+    return addressLines.join(', ');
   }
   
   return null;
@@ -196,9 +208,27 @@ function extractShippingAddress(body) {
  * Ülkeyi çıkar
  */
 function extractCountry(body) {
-  const countries = ['United States', 'USA', 'UK', 'United Kingdom', 'Canada', 'Australia', 
-                     'Germany', 'France', 'Italy', 'Spain', 'Netherlands', 'Japan'];
+  const countries = [
+    'United States', 'USA', 'UK', 'United Kingdom', 'Canada', 'Australia',
+    'Germany', 'France', 'Italy', 'Spain', 'Netherlands', 'Japan',
+    'Belgium', 'Switzerland', 'Austria', 'Sweden', 'Norway', 'Denmark',
+    'Finland', 'Ireland', 'Portugal', 'Greece', 'Poland', 'Czech Republic',
+    'New Zealand', 'Mexico', 'Brazil', 'Argentina', 'Singapore', 'Hong Kong',
+    'South Korea', 'Taiwan', 'Israel', 'United Arab Emirates', 'Turkey'
+  ];
   
+  // Shipping address bloğunda ülkeyi ara
+  const addressMatch = body.match(/Shipping address\s*\n([\s\S]*?)(?=\n\n|USPS|Learn more)/i);
+  if (addressMatch) {
+    const addressBlock = addressMatch[1];
+    for (const country of countries) {
+      if (addressBlock.includes(country)) {
+        return country;
+      }
+    }
+  }
+  
+  // Genel arama
   for (const country of countries) {
     if (body.includes(country)) {
       return country;
@@ -210,19 +240,37 @@ function extractCountry(body) {
 
 
 /**
- * Fiyatı çıkar
+ * Order Total fiyatı çıkar (indirim sonrası gerçek ödenen)
  */
-function extractPrice(body, subject) {
+function extractOrderTotal(body, subject) {
+  // Subject'ten: [$66.97, Order #...]
+  const subjectMatch = subject.match(/\[\$(\d+(?:\.\d{2})?)/);
+  if (subjectMatch) {
+    return parseFloat(subjectMatch[1]);
+  }
+  
+  // Body'den: Order total: $66.97
+  const orderTotalMatch = body.match(/Order total[:\s]*\$(\d+(?:\.\d{2})?)/i);
+  if (orderTotalMatch) {
+    return parseFloat(orderTotalMatch[1]);
+  }
+  
+  return 0;
+}
+
+
+/**
+ * Item fiyatını çıkar (indirim öncesi)
+ */
+function extractItemPrice(body) {
+  // Item total: $140.00 veya Price: $140.00
   const patterns = [
-    /\$\s*(\d+(?:\.\d{2})?)/,
-    /USD\s*(\d+(?:\.\d{2})?)/,
-    /Total[:\s]+\$?(\d+(?:\.\d{2})?)/i,
+    /Item total[:\s]*\$(\d+(?:\.\d{2})?)/i,
+    /Price[:\s]*\$(\d+(?:\.\d{2})?)/i,
   ];
   
-  const text = body + ' ' + subject;
-  
   for (const pattern of patterns) {
-    const match = text.match(pattern);
+    const match = body.match(pattern);
     if (match) {
       return parseFloat(match[1]);
     }
@@ -233,20 +281,183 @@ function extractPrice(body, subject) {
 
 
 /**
- * Ürünleri çıkar
+ * Ürün başlığını çıkar
+ */
+function extractProductTitle(body) {
+  // "Order details" veya "Sell with confidence" öncesindeki ürün adı
+  // Örnek: "Colorful Cactus Canvas Print | Modern Southwestern Landscape Art"
+  const patterns = [
+    /Sell with confidence[\s\S]*?Learn about[\s\S]*?\.\s*\n([^\n]+Canvas[^\n]+)/i,
+    /Order details\s*\n[\s\S]*?\n([^\n]*(?:Canvas|Print|Art|Poster|Wall)[^\n]*)/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = body.match(pattern);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+  
+  // Alternatif: DIMENSIONS'dan önce gelen satır
+  const dimMatch = body.match(/([^\n]+)\nDIMENSIONS:/i);
+  if (dimMatch) {
+    return dimMatch[1].trim();
+  }
+  
+  return null;
+}
+
+
+/**
+ * Boyut bilgisini çıkar
+ */
+function extractDimensions(body) {
+  // DIMENSIONS: 16"x24" – 40x60cm
+  const match = body.match(/DIMENSIONS[:\s]*([^\n]+)/i);
+  if (match) {
+    return match[1].trim();
+  }
+  return null;
+}
+
+
+/**
+ * Çerçeve seçeneğini çıkar
+ */
+function extractFrameOption(body) {
+  // FRAMED OPTIONS: STRETCHED CANVAS
+  const match = body.match(/FRAMED?\s*OPTIONS?[:\s]*([^\n]+)/i);
+  if (match) {
+    return match[1].trim();
+  }
+  return null;
+}
+
+
+/**
+ * Miktarı çıkar
+ */
+function extractQuantity(body) {
+  // Quantity: 1
+  const match = body.match(/Quantity[:\s]*(\d+)/i);
+  if (match) {
+    return parseInt(match[1]);
+  }
+  
+  // Subject'ten: sale of X item
+  const saleMatch = body.match(/sale of (\d+) item/i);
+  if (saleMatch) {
+    return parseInt(saleMatch[1]);
+  }
+  
+  return 1;
+}
+
+
+/**
+ * Mağaza adını çıkar
+ */
+function extractShopName(body) {
+  // Shop: StarCanvasArtStore
+  const match = body.match(/Shop[:\s]*([^\n]+)/i);
+  if (match) {
+    return match[1].trim();
+  }
+  return null;
+}
+
+
+/**
+ * Transaction ID'yi çıkar
+ */
+function extractTransactionId(body) {
+  // Transaction ID: 4927920834
+  const match = body.match(/Transaction ID[:\s]*(\d+)/i);
+  if (match) {
+    return match[1];
+  }
+  return null;
+}
+
+
+/**
+ * İndirim tutarını çıkar
+ */
+function extractDiscount(body) {
+  // Discount: - $77.00
+  const match = body.match(/Discount[:\s]*-?\s*\$(\d+(?:\.\d{2})?)/i);
+  if (match) {
+    return parseFloat(match[1]);
+  }
+  return 0;
+}
+
+
+/**
+ * Kargo ücretini çıkar
+ */
+function extractShippingCost(body) {
+  // Shipping: $0.00
+  const match = body.match(/Shipping[:\s]*\$(\d+(?:\.\d{2})?)/i);
+  if (match) {
+    return parseFloat(match[1]);
+  }
+  return 0;
+}
+
+
+/**
+ * Vergi tutarını çıkar
+ */
+function extractSalesTax(body) {
+  // Sales tax: $3.97
+  const match = body.match(/Sales tax[:\s]*\$(\d+(?:\.\d{2})?)/i);
+  if (match) {
+    return parseFloat(match[1]);
+  }
+  return 0;
+}
+
+
+/**
+ * Etsy sipariş URL'sini çıkar
+ */
+function extractEtsyOrderUrl(body, htmlBody) {
+  // View the invoice: http://www.etsy.com/your/orders/3951008900
+  const match = body.match(/View the invoice[:\s]*(https?:\/\/[^\s\n]+)/i);
+  if (match) {
+    return match[1].trim();
+  }
+  
+  // HTML'den
+  const htmlMatch = htmlBody.match(/href="(https?:\/\/www\.etsy\.com\/your\/orders\/\d+)"/i);
+  if (htmlMatch) {
+    return htmlMatch[1];
+  }
+  
+  return null;
+}
+
+
+/**
+ * Ürünleri çıkar (gelişmiş)
  */
 function extractItems(body) {
   const items = [];
   
-  // Basit item pattern
-  const itemPattern = /(\d+)\s*x\s*(.+?)(?:\n|$)/gi;
-  let match;
+  const productTitle = extractProductTitle(body);
+  const dimensions = extractDimensions(body);
+  const frameOption = extractFrameOption(body);
+  const quantity = extractQuantity(body);
+  const price = extractItemPrice(body);
   
-  while ((match = itemPattern.exec(body)) !== null) {
+  if (productTitle || dimensions) {
     items.push({
-      quantity: parseInt(match[1]),
-      title: match[2].trim(),
-      price: 0,
+      title: productTitle || 'Canvas Print',
+      dimensions: dimensions,
+      frameOption: frameOption,
+      quantity: quantity,
+      price: price,
     });
   }
   
@@ -323,4 +534,24 @@ function testWebhook() {
   
   const result = sendToWebhook(testData);
   Logger.log('Test result: ' + JSON.stringify(result));
+}
+
+
+/**
+ * Debug fonksiyonu - Son emaili parse et ve göster
+ */
+function debugLastEmail() {
+  const searchQuery = 'from:transaction@etsy.com subject:"You made a sale"';
+  const threads = GmailApp.search(searchQuery, 0, 1);
+  
+  if (threads.length === 0) {
+    Logger.log('No emails found');
+    return;
+  }
+  
+  const message = threads[0].getMessages()[0];
+  const orderData = parseEtsyEmail(message);
+  
+  Logger.log('=== PARSED ORDER DATA ===');
+  Logger.log(JSON.stringify(orderData, null, 2));
 }
