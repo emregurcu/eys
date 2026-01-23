@@ -582,11 +582,12 @@ export default function OrdersPage() {
                 <tr className="border-b bg-muted/50">
                   <th className="text-left p-4 font-medium">Sipariş</th>
                   <th className="text-left p-4 font-medium hidden sm:table-cell">Tarih</th>
-                  <th className="text-left p-4 font-medium hidden md:table-cell">Müşteri</th>
-                  <th className="text-left p-4 font-medium hidden lg:table-cell">Mağaza</th>
+                  <th className="text-left p-4 font-medium hidden md:table-cell">Ürün</th>
+                  <th className="text-left p-4 font-medium hidden lg:table-cell">Müşteri</th>
+                  <th className="text-left p-4 font-medium hidden xl:table-cell">Mağaza</th>
                   <th className="text-left p-4 font-medium">Durum</th>
                   <th className="text-right p-4 font-medium">Satış</th>
-                  <th className="text-right p-4 font-medium hidden lg:table-cell">Maliyet</th>
+                  <th className="text-right p-4 font-medium hidden xl:table-cell">Maliyet</th>
                   <th className="text-right p-4 font-medium">Kar</th>
                   <th className="text-right p-4 font-medium">İşlemler</th>
                 </tr>
@@ -599,10 +600,11 @@ export default function OrdersPage() {
                       <td className="p-4"><div className="h-4 bg-muted rounded animate-pulse w-24" /></td>
                       <td className="p-4 hidden sm:table-cell"><div className="h-4 bg-muted rounded animate-pulse w-20" /></td>
                       <td className="p-4 hidden md:table-cell"><div className="h-4 bg-muted rounded animate-pulse w-32" /></td>
-                      <td className="p-4 hidden lg:table-cell"><div className="h-4 bg-muted rounded animate-pulse w-20" /></td>
+                      <td className="p-4 hidden lg:table-cell"><div className="h-4 bg-muted rounded animate-pulse w-28" /></td>
+                      <td className="p-4 hidden xl:table-cell"><div className="h-4 bg-muted rounded animate-pulse w-20" /></td>
                       <td className="p-4"><div className="h-6 bg-muted rounded animate-pulse w-16" /></td>
                       <td className="p-4"><div className="h-4 bg-muted rounded animate-pulse w-16 ml-auto" /></td>
-                      <td className="p-4 hidden lg:table-cell"><div className="h-4 bg-muted rounded animate-pulse w-16 ml-auto" /></td>
+                      <td className="p-4 hidden xl:table-cell"><div className="h-4 bg-muted rounded animate-pulse w-16 ml-auto" /></td>
                       <td className="p-4"><div className="h-4 bg-muted rounded animate-pulse w-16 ml-auto" /></td>
                       <td className="p-4"><div className="h-8 bg-muted rounded animate-pulse w-8 ml-auto" /></td>
                     </tr>
@@ -616,6 +618,22 @@ export default function OrdersPage() {
                       <p className="text-sm">{formatDate(order.orderDate)}</p>
                     </td>
                     <td className="p-4 hidden md:table-cell">
+                      <div className="max-w-[200px]">
+                        {order.items && order.items.length > 0 ? (
+                          order.items.map((item: any, idx: number) => (
+                            <p key={idx} className="text-sm truncate">
+                              {item.canvasSize?.name || '-'} - {item.frameOption?.name || 'Çerçevesiz'}
+                              {item.quantity > 1 && ` (x${item.quantity})`}
+                            </p>
+                          ))
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            {order._count?.items ? `${order._count.items} ürün` : '-'}
+                          </p>
+                        )}
+                      </div>
+                    </td>
+                    <td className="p-4 hidden lg:table-cell">
                       <div>
                         <p>{order.customerName}</p>
                         <p className="text-sm text-muted-foreground">
@@ -623,7 +641,7 @@ export default function OrdersPage() {
                         </p>
                       </div>
                     </td>
-                    <td className="p-4 hidden lg:table-cell">
+                    <td className="p-4 hidden xl:table-cell">
                       {order.store.name}
                     </td>
                     <td className="p-4">
@@ -634,7 +652,7 @@ export default function OrdersPage() {
                     <td className="p-4 text-right font-medium">
                       {formatCurrency(order.salePrice, order.saleCurrency)}
                     </td>
-                    <td className="p-4 text-right hidden lg:table-cell text-muted-foreground">
+                    <td className="p-4 text-right hidden xl:table-cell text-muted-foreground">
                       {formatCurrency(order.totalCost || 0, 'USD')}
                     </td>
                     <td className="p-4 text-right">
@@ -714,6 +732,14 @@ export default function OrdersPage() {
                   </Badge>
                 </div>
                 <div>
+                  <p className="text-sm text-muted-foreground">Mağaza</p>
+                  <p className="font-medium">{selectedOrder.store?.name || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Sipariş Tarihi</p>
+                  <p className="font-medium">{formatDate(selectedOrder.orderDate)}</p>
+                </div>
+                <div>
                   <p className="text-sm text-muted-foreground">Müşteri</p>
                   <p className="font-medium">{selectedOrder.customerName}</p>
                 </div>
@@ -722,6 +748,36 @@ export default function OrdersPage() {
                   <p className="font-medium">{selectedOrder.country?.name || selectedOrder.shippingCountry || '-'}</p>
                 </div>
               </div>
+
+              {/* Ürün Bilgileri */}
+              <div className="border rounded-lg p-4 space-y-2 bg-muted/20">
+                <h4 className="font-medium">Ürün Bilgileri</h4>
+                {selectedOrder.items && selectedOrder.items.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedOrder.items.map((item: any, i: number) => (
+                      <div key={i} className="flex justify-between items-center text-sm">
+                        <div>
+                          <span className="font-medium">{item.canvasSize?.name || '-'}</span>
+                          <span className="text-muted-foreground"> - </span>
+                          <span>{item.frameOption?.name || 'Çerçevesiz'}</span>
+                          {item.quantity > 1 && <span className="text-muted-foreground"> (x{item.quantity})</span>}
+                        </div>
+                        {item.title && <span className="text-muted-foreground text-xs">{item.title}</span>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Ürün bilgisi mevcut değil</p>
+                )}
+              </div>
+
+              {/* Teslimat Adresi */}
+              {selectedOrder.shippingAddress && (
+                <div className="border rounded-lg p-4 space-y-2">
+                  <h4 className="font-medium">Teslimat Adresi</h4>
+                  <p className="text-sm whitespace-pre-wrap">{selectedOrder.shippingAddress}</p>
+                </div>
+              )}
 
               {/* Maliyet Detayları */}
               <div className="border rounded-lg p-4 space-y-2">
@@ -750,35 +806,6 @@ export default function OrdersPage() {
                     </span>
                   </div>
                 </div>
-              </div>
-
-              {/* Ürünler */}
-              <div>
-                <h4 className="font-medium mb-2">
-                  Ürünler ({selectedOrder._count?.items || selectedOrder.items?.length || 0} adet)
-                </h4>
-                {selectedOrder.items && selectedOrder.items.length > 0 ? (
-                  <div className="border rounded-lg divide-y">
-                    {selectedOrder.items.map((item: any, i: number) => (
-                      <div key={i} className="p-3">
-                        <div className="flex justify-between">
-                          <span>{item.title} x{item.quantity}</span>
-                          <span className="font-medium">{formatCurrency(item.salePrice * item.quantity, 'USD')}</span>
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {item.canvasSize?.name} {item.frameOption?.name && `+ ${item.frameOption.name}`}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Maliyet: {formatCurrency(item.totalCost || item.canvasCost || 0, 'USD')}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="border rounded-lg p-3 text-sm text-muted-foreground">
-                    Ürün detayları maliyet analizinde gösterilmektedir.
-                  </div>
-                )}
               </div>
 
               {/* Ürün Görseli */}
