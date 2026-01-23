@@ -84,7 +84,7 @@ function processEtsyEmails() {
  */
 function parseEtsyEmail(message) {
   const subject = message.getSubject();
-  const body = message.getPlainBody();
+  let body = message.getPlainBody();
   const htmlBody = message.getBody();
   const to = message.getTo();
   
@@ -93,7 +93,11 @@ function parseEtsyEmail(message) {
     return null;
   }
   
+  // HTML entities temizle
+  body = cleanHtmlEntities(body);
+  
   // Temel bilgileri çıkar
+  const productTitle = extractProductTitle(body);
   const orderData = {
     secret: CONFIG.WEBHOOK_SECRET,
     storeEmail: extractStoreEmail(to),
@@ -106,7 +110,7 @@ function parseEtsyEmail(message) {
     currency: 'USD',
     orderDate: message.getDate().toISOString(),
     items: extractItems(body),
-    productTitle: extractProductTitle(body),
+    productTitle: productTitle ? productTitle.replace(/^Item[:\s]*/i, '').trim().replace(/\s+/g, ' ') : null,
     dimensions: extractDimensions(body),
     frameOption: extractFrameOption(body),
     quantity: extractQuantity(body),
@@ -126,6 +130,21 @@ function parseEtsyEmail(message) {
   }
   
   return orderData;
+}
+
+
+/**
+ * HTML entities temizle
+ */
+function cleanHtmlEntities(text) {
+  if (!text) return text;
+  return text
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ');
 }
 
 
@@ -167,19 +186,35 @@ function extractOrderNumber(body, subject) {
  * Müşteri adını çıkar - Shipping address altındaki ilk satır
  */
 function extractCustomerName(body) {
-  // "Shipping address" altındaki isim
+  // "Shipping address" altındaki isim - çeşitli formatlar
   const patterns = [
-    /Shipping address\s*\n([A-Za-z\s\-\.]+)\n/i,
-    /Ship to[:\s]*\n?([A-Za-z\s\-\.]+)/i,
+    /Shipping address\s*\n([A-Za-z][A-Za-z\s\-\.]+)/i,
+    /Ship to[:\s]*\n?([A-Za-z][A-Za-z\s\-\.]+)/i,
+    /Ship by[^\n]*\n[\s\S]*?([A-Z][a-z]+\s+[A-Z][a-z]+)/,
   ];
   
   for (const pattern of patterns) {
     const match = body.match(pattern);
     if (match) {
       const name = match[1].trim();
-      // Eğer adres gibi görünüyorsa atla
-      if (!name.match(/^\d/) && name.length > 2) {
+      // Eğer adres gibi görünüyorsa atla, en az iki kelime olmalı
+      if (!name.match(/^\d/) && name.length > 3 && name.includes(' ')) {
         return name;
+      }
+    }
+  }
+  
+  // PDF formatından: İsim genellikle adres bloğunun başında
+  const addressBlock = body.match(/Shipping address[\s\S]*?United States/i);
+  if (addressBlock) {
+    const lines = addressBlock[0].split('\n').filter(l => l.trim());
+    for (const line of lines) {
+      const trimmed = line.trim();
+      // İsim gibi görünen satır: sadece harfler ve boşluk, en az 2 kelime
+      if (/^[A-Za-z][A-Za-z\s\-\.]+$/.test(trimmed) && trimmed.includes(' ') && trimmed.length > 3) {
+        if (!trimmed.toLowerCase().includes('shipping') && !trimmed.toLowerCase().includes('address')) {
+          return trimmed;
+        }
       }
     }
   }
@@ -192,12 +227,29 @@ function extractCustomerName(body) {
  * Teslimat adresini çıkar - Tam adres bloğu
  */
 function extractShippingAddress(body) {
-  // Shipping address bloğunu bul
-  const match = body.match(/Shipping address\s*\n([\s\S]*?)(?=\n\n|USPS|Learn more|Shipping internationally)/i);
+  // Shipping address bloğunu bul - farklı formatlar
+  const patterns = [
+    /Shipping address\s*\n([\s\S]*?)(?=\n\n|USPS|Learn more|Shipping internationally)/i,
+    /Shipping address\s*([\s\S]*?)(?=USPS|Learn more|Shipping internationally|Payment method)/i,
+  ];
   
-  if (match) {
-    const addressLines = match[1].trim().split('\n').filter(line => line.trim());
-    return addressLines.join(', ');
+  for (const pattern of patterns) {
+    const match = body.match(pattern);
+    if (match) {
+      const addressLines = match[1].trim().split('\n').filter(line => {
+        const trimmed = line.trim();
+        return trimmed && !trimmed.toLowerCase().includes('shipping address');
+      });
+      if (addressLines.length > 0) {
+        return addressLines.join(', ');
+      }
+    }
+  }
+  
+  // PDF formatından adres çıkarma
+  const pdfMatch = body.match(/Shipping address[\s\S]*?((?:[A-Za-z][A-Za-z\s\-\.]+\n)?[\d]+[^\n]+\n[^\n]+\n[^\n]*(?:United States|USA|UK|Canada|Australia|Germany|France)[^\n]*)/i);
+  if (pdfMatch) {
+    return pdfMatch[1].trim().replace(/\n+/g, ', ');
   }
   
   return null;
@@ -284,24 +336,33 @@ function extractItemPrice(body) {
  * Ürün başlığını çıkar
  */
 function extractProductTitle(body) {
-  // "Order details" veya "Sell with confidence" öncesindeki ürün adı
-  // Örnek: "Colorful Cactus Canvas Print | Modern Southwestern Landscape Art"
+  // DIMENSIONS'dan önce gelen satır - en güvenilir yöntem
+  const dimMatch = body.match(/([^\n]+)\nDIMENSIONS:/i);
+  if (dimMatch) {
+    let title = dimMatch[1].trim();
+    // "Item:" prefix'i temizle
+    title = title.replace(/^Item[:\s]*/i, '').trim();
+    // Birden fazla boşluğu tek boşluğa çevir
+    title = title.replace(/\s+/g, ' ');
+    if (title.length > 5) {
+      return title;
+    }
+  }
+  
+  // "Order details" veya "Sell with confidence" sonrasındaki ürün adı
   const patterns = [
-    /Sell with confidence[\s\S]*?Learn about[\s\S]*?\.\s*\n([^\n]+Canvas[^\n]+)/i,
+    /Sell with confidence[\s\S]*?Learn about[\s\S]*?\.\s*\n([^\n]+(?:Canvas|Print|Art|Poster|Wall)[^\n]+)/i,
     /Order details\s*\n[\s\S]*?\n([^\n]*(?:Canvas|Print|Art|Poster|Wall)[^\n]*)/i,
   ];
   
   for (const pattern of patterns) {
     const match = body.match(pattern);
     if (match) {
-      return match[1].trim();
+      let title = match[1].trim();
+      title = title.replace(/^Item[:\s]*/i, '').trim();
+      title = title.replace(/\s+/g, ' ');
+      return title;
     }
-  }
-  
-  // Alternatif: DIMENSIONS'dan önce gelen satır
-  const dimMatch = body.match(/([^\n]+)\nDIMENSIONS:/i);
-  if (dimMatch) {
-    return dimMatch[1].trim();
   }
   
   return null;
@@ -315,7 +376,14 @@ function extractDimensions(body) {
   // DIMENSIONS: 16"x24" – 40x60cm
   const match = body.match(/DIMENSIONS[:\s]*([^\n]+)/i);
   if (match) {
-    return match[1].trim();
+    // HTML entities temizle
+    let dim = match[1].trim();
+    dim = dim.replace(/&quot;/g, '"');
+    dim = dim.replace(/&amp;/g, '&');
+    dim = dim.replace(/&#39;/g, "'");
+    dim = dim.replace(/&lt;/g, '<');
+    dim = dim.replace(/&gt;/g, '>');
+    return dim;
   }
   return null;
 }
@@ -359,9 +427,13 @@ function extractQuantity(body) {
  */
 function extractShopName(body) {
   // Shop: StarCanvasArtStore
-  const match = body.match(/Shop[:\s]*([^\n]+)/i);
+  const match = body.match(/Shop[:\s]*([A-Za-z0-9_\-]+)/i);
   if (match) {
-    return match[1].trim();
+    const shopName = match[1].trim();
+    // "Shipping" gibi yanlış eşleşmeleri atla
+    if (!shopName.toLowerCase().includes('ship') && shopName.length > 2) {
+      return shopName;
+    }
   }
   return null;
 }
@@ -445,11 +517,17 @@ function extractEtsyOrderUrl(body, htmlBody) {
 function extractItems(body) {
   const items = [];
   
-  const productTitle = extractProductTitle(body);
+  let productTitle = extractProductTitle(body);
   const dimensions = extractDimensions(body);
   const frameOption = extractFrameOption(body);
   const quantity = extractQuantity(body);
   const price = extractItemPrice(body);
+  
+  // Title temizleme
+  if (productTitle) {
+    productTitle = productTitle.replace(/^Item[:\s]*/i, '').trim();
+    productTitle = productTitle.replace(/\s+/g, ' ');
+  }
   
   if (productTitle || dimensions) {
     items.push({
