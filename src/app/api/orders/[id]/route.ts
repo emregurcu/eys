@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { notifyOrderStatusChange } from '@/lib/notifications';
+import { calculateOrderCosts } from '@/lib/order-costs';
 
 // GET - Tek sipariş getir
 export async function GET(
@@ -68,11 +69,20 @@ export async function PUT(
       items,
     } = body;
 
-    // Mevcut siparişi al (durum değişikliği kontrolü için)
+    // Mevcut siparişi al (durum değişikliği ve maliyet hesaplama için)
     const existingOrder = await prisma.order.findUnique({
       where: { id: params.id },
-      select: { status: true },
+      select: { 
+        status: true,
+        storeId: true,
+        salePrice: true,
+        countryId: true,
+      },
     });
+
+    if (!existingOrder) {
+      return NextResponse.json({ error: 'Sipariş bulunamadı' }, { status: 404 });
+    }
 
     // Items güncellemesi varsa önce mevcut items'ları sil
     if (items && Array.isArray(items)) {
@@ -110,6 +120,53 @@ export async function PUT(
           notes: item.notes || null,
         })),
       };
+    }
+
+    // Eğer items, countryId veya salePrice değiştiyse maliyetleri yeniden hesapla
+    const shouldRecalculate = items || countryId !== undefined || salePrice !== undefined;
+    
+    if (shouldRecalculate) {
+      const finalItems = items && Array.isArray(items) 
+        ? items 
+        : await prisma.orderItem.findMany({
+            where: { orderId: params.id },
+            select: {
+              canvasSizeId: true,
+              frameOptionId: true,
+              quantity: true,
+            },
+          });
+
+      const finalSalePrice = salePrice !== undefined 
+        ? parseFloat(salePrice) 
+        : existingOrder.salePrice;
+
+      const finalCountryId = countryId !== undefined 
+        ? countryId 
+        : existingOrder.countryId;
+
+      try {
+        const costs = await calculateOrderCosts({
+          storeId: existingOrder.storeId,
+          salePrice: finalSalePrice,
+          items: finalItems.map(item => ({
+            canvasSizeId: item.canvasSizeId,
+            frameOptionId: item.frameOptionId,
+            quantity: item.quantity,
+          })),
+          countryId: finalCountryId || null,
+        });
+
+        updateData.productCost = costs.productCost;
+        updateData.shippingCost = costs.shippingCost;
+        updateData.etsyFees = costs.etsyFees;
+        updateData.totalCost = costs.totalCost;
+        updateData.netProfit = costs.netProfit;
+        updateData.profitMargin = costs.profitMargin;
+      } catch (error: any) {
+        console.error('Cost calculation error:', error);
+        // Hesaplama hatası olsa bile siparişi güncelle
+      }
     }
 
     const order = await prisma.order.update({

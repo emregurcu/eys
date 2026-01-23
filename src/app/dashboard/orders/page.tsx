@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -38,6 +39,8 @@ import {
   FileDown,
   Image,
   Link,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -136,6 +139,8 @@ export default function OrdersPage() {
   
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [editOrderForm, setEditOrderForm] = useState({
     storeId: '',
     orderNumber: '',
@@ -539,6 +544,59 @@ export default function OrdersPage() {
     }
   };
 
+  // Toplu düzenleme fonksiyonları
+  const toggleOrderSelection = (orderId: string) => {
+    const newSelected = new Set(selectedOrders);
+    if (newSelected.has(orderId)) {
+      newSelected.delete(orderId);
+    } else {
+      newSelected.add(orderId);
+    }
+    setSelectedOrders(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedOrders.size === sortedOrders.length) {
+      setSelectedOrders(new Set());
+    } else {
+      setSelectedOrders(new Set(sortedOrders.map(o => o.id)));
+    }
+  };
+
+  const bulkUpdateOrders = async (updateData: any) => {
+    if (selectedOrders.size === 0) {
+      toast.error('Lütfen en az bir sipariş seçin');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const promises = Array.from(selectedOrders).map(orderId =>
+        fetch(`/api/orders/${orderId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updateData),
+        })
+      );
+
+      const results = await Promise.all(promises);
+      const successCount = results.filter(r => r.ok).length;
+
+      if (successCount === selectedOrders.size) {
+        toast.success(`${successCount} sipariş güncellendi`);
+        setSelectedOrders(new Set());
+        setShowBulkEdit(false);
+        fetchOrders();
+      } else {
+        toast.warning(`${successCount}/${selectedOrders.size} sipariş güncellendi`);
+        fetchOrders();
+      }
+    } catch (error) {
+      toast.error('Toplu güncelleme başarısız');
+    }
+    setLoading(false);
+  };
+
   // Toplam kar/zarar hesapla
   const totalProfit = sortedOrders.reduce((sum, o) => sum + (o.netProfit || 0), 0);
   const totalRevenue = sortedOrders.reduce((sum, o) => sum + (o.salePrice || 0), 0);
@@ -599,6 +657,14 @@ export default function OrdersPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          {selectedOrders.size > 0 && (
+            <Button 
+              variant="outline" 
+              onClick={() => setShowBulkEdit(true)}
+            >
+              <Edit className="mr-2 h-4 w-4" /> Toplu Düzenle ({selectedOrders.size})
+            </Button>
+          )}
           <Button 
             variant="outline" 
             onClick={handleBulkPDF}
@@ -689,6 +755,12 @@ export default function OrdersPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b bg-muted/50">
+                  <th className="text-left p-4 font-medium w-12">
+                    <Checkbox
+                      checked={selectedOrders.size === sortedOrders.length && sortedOrders.length > 0}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </th>
                   <th className="text-left p-4 font-medium">Sipariş</th>
                   <th className="text-left p-4 font-medium hidden sm:table-cell">Tarih</th>
                   <th className="text-left p-4 font-medium hidden md:table-cell">Ürün</th>
@@ -719,7 +791,13 @@ export default function OrdersPage() {
                     </tr>
                   ))
                 ) : sortedOrders.map((order) => (
-                  <tr key={order.id} className="border-b hover:bg-muted/30">
+                  <tr key={order.id} className={`border-b hover:bg-muted/30 ${selectedOrders.has(order.id) ? 'bg-muted/50' : ''}`}>
+                    <td className="p-4">
+                      <Checkbox
+                        checked={selectedOrders.has(order.id)}
+                        onCheckedChange={() => toggleOrderSelection(order.id)}
+                      />
+                    </td>
                     <td className="p-4">
                       <p className="font-medium">{order.orderNumber}</p>
                     </td>
@@ -1210,6 +1288,66 @@ export default function OrdersPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Toplu Düzenleme Dialog */}
+      <Dialog open={showBulkEdit} onOpenChange={setShowBulkEdit}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Toplu Düzenle ({selectedOrders.size} sipariş)</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Durum</label>
+              <Select 
+                defaultValue="" 
+                onValueChange={(value) => {
+                  if (value) {
+                    bulkUpdateOrders({ status: value });
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Durum seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NEW">Yeni</SelectItem>
+                  <SelectItem value="PROCESSING">İşleniyor</SelectItem>
+                  <SelectItem value="PRODUCTION">Üretimde</SelectItem>
+                  <SelectItem value="READY">Hazır</SelectItem>
+                  <SelectItem value="SHIPPED">Kargoda</SelectItem>
+                  <SelectItem value="DELIVERED">Teslim Edildi</SelectItem>
+                  <SelectItem value="PROBLEM">Problem</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Mağaza</label>
+              <Select 
+                defaultValue="" 
+                onValueChange={(value) => {
+                  if (value) {
+                    bulkUpdateOrders({ storeId: value });
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Mağaza seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  {stores.map((store) => (
+                    <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 pt-4">
+              <Button variant="outline" className="flex-1" onClick={() => setShowBulkEdit(false)}>
+                İptal
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
