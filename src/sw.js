@@ -21,5 +21,5 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(clients.openWindow(url));
 });
 
-// Workbox inject manifest placeholder (tek kez)
-self.__WB_MANIFEST = self.__WB_MANIFEST || [];
+// Workbox inject manifest placeholder
+self.__WB_MANIFEST;
