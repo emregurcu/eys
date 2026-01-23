@@ -41,6 +41,8 @@ import {
   Link,
   CheckSquare,
   Square,
+  Upload,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -1154,18 +1156,73 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="text-sm font-medium">Ürün Görseli (Opsiyonel)</label>
-                <div className="flex items-center gap-2 mt-1">
+              {/* Ürün Görseli */}
+              <div className="border rounded-lg p-4 space-y-3 bg-muted/20">
+                <div className="flex items-center gap-2">
+                  <Image className="h-4 w-4" />
+                  <label className="text-sm font-medium">Ürün Görseli (Opsiyonel)</label>
+                </div>
+                
+                {/* Dosya Yükleme */}
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          // Dosya boyutu kontrolü (max 5MB)
+                          if (file.size > 5 * 1024 * 1024) {
+                            toast.error('Görsel boyutu 5MB\'dan küçük olmalıdır');
+                            return;
+                          }
+                          
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            const result = event.target?.result as string;
+                            setEditOrderForm({ ...editOrderForm, imageUrl: result });
+                          };
+                          reader.onerror = () => {
+                            toast.error('Görsel yüklenirken hata oluştu');
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                    <Button type="button" variant="outline" size="sm" asChild>
+                      <span>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Görsel Yükle
+                      </span>
+                    </Button>
+                  </label>
+                </div>
+
+                {/* URL veya Yüklenen Görsel */}
+                <div className="flex items-center gap-2">
                   <Link className="h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Görsel URL'si yapıştırın"
-                    value={editOrderForm.imageUrl}
+                    placeholder="Veya görsel URL'si yapıştırın (Etsy, Google Drive, vb.)"
+                    value={editOrderForm.imageUrl?.startsWith('data:') ? '' : editOrderForm.imageUrl}
                     onChange={(e) => setEditOrderForm({ ...editOrderForm, imageUrl: e.target.value })}
                   />
+                  {editOrderForm.imageUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditOrderForm({ ...editOrderForm, imageUrl: '' })}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
+
+                {/* Önizleme */}
                 {editOrderForm.imageUrl && (
-                  <div className="border rounded bg-background p-2 mt-2">
+                  <div className="border rounded bg-background p-2 relative">
                     <img 
                       src={editOrderForm.imageUrl} 
                       alt="Önizleme" 
@@ -1174,8 +1231,19 @@ export default function OrdersPage() {
                         (e.target as HTMLImageElement).style.display = 'none';
                       }}
                     />
+                    {editOrderForm.imageUrl.startsWith('data:') && (
+                      <div className="absolute top-2 right-2">
+                        <Badge variant="secondary" className="text-xs">
+                          Yüklenen
+                        </Badge>
+                      </div>
+                    )}
                   </div>
                 )}
+                
+                <p className="text-xs text-muted-foreground">
+                  Görsel yükleyebilir veya URL yapıştırabilirsiniz. Maksimum dosya boyutu: 5MB
+                </p>
               </div>
 
               {/* Ürünler */}
@@ -1444,16 +1512,67 @@ export default function OrdersPage() {
                 <Image className="h-4 w-4" />
                 <label className="text-sm font-medium">Ürün Görseli (Opsiyonel)</label>
               </div>
+              
+              {/* Dosya Yükleme */}
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        // Dosya boyutu kontrolü (max 5MB)
+                        if (file.size > 5 * 1024 * 1024) {
+                          toast.error('Görsel boyutu 5MB\'dan küçük olmalıdır');
+                          return;
+                        }
+                        
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          const result = event.target?.result as string;
+                          setOrderForm({ ...orderForm, imageUrl: result });
+                        };
+                        reader.onerror = () => {
+                          toast.error('Görsel yüklenirken hata oluştu');
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  <Button type="button" variant="outline" size="sm" asChild>
+                    <span>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Görsel Yükle
+                    </span>
+                  </Button>
+                </label>
+              </div>
+
+              {/* URL veya Yüklenen Görsel */}
               <div className="flex items-center gap-2">
                 <Link className="h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Görsel URL'si yapıştırın (Etsy, Google Drive, vb.)"
-                  value={orderForm.imageUrl}
+                  placeholder="Veya görsel URL'si yapıştırın (Etsy, Google Drive, vb.)"
+                  value={orderForm.imageUrl?.startsWith('data:') ? '' : orderForm.imageUrl}
                   onChange={(e) => setOrderForm({ ...orderForm, imageUrl: e.target.value })}
                 />
+                {orderForm.imageUrl && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setOrderForm({ ...orderForm, imageUrl: '' })}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
+
+              {/* Önizleme */}
               {orderForm.imageUrl && (
-                <div className="border rounded bg-background p-2">
+                <div className="border rounded bg-background p-2 relative">
                   <img 
                     src={orderForm.imageUrl} 
                     alt="Önizleme" 
@@ -1462,10 +1581,18 @@ export default function OrdersPage() {
                       (e.target as HTMLImageElement).style.display = 'none';
                     }}
                   />
+                  {orderForm.imageUrl.startsWith('data:') && (
+                    <div className="absolute top-2 right-2">
+                      <Badge variant="secondary" className="text-xs">
+                        Yüklenen
+                      </Badge>
+                    </div>
+                  )}
                 </div>
               )}
+              
               <p className="text-xs text-muted-foreground">
-                Etsy sipariş görselini buraya ekleyebilirsiniz. Google Drive, Dropbox veya direkt görsel linki kullanabilirsiniz.
+                Görsel yükleyebilir veya URL yapıştırabilirsiniz. Maksimum dosya boyutu: 5MB
               </p>
             </div>
 
