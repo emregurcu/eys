@@ -28,6 +28,7 @@ import {
   Search,
   Plus,
   Eye,
+  Edit,
   Truck,
   MoreVertical,
   Trash2,
@@ -71,6 +72,7 @@ interface Order {
   orderDate: string;
   store: { id: string; name: string };
   country: { name: string; code: string } | null;
+  countryId?: string | null;
   items?: any[];
   _count?: { items: number };
 }
@@ -133,6 +135,21 @@ export default function OrdersPage() {
   const [sortBy, setSortBy] = useState('newest');
   
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [editOrderForm, setEditOrderForm] = useState({
+    storeId: '',
+    orderNumber: '',
+    customerName: '',
+    customerEmail: '',
+    countryId: '',
+    shippingAddress: '',
+    salePrice: '',
+    saleCurrency: 'USD',
+    orderDate: new Date().toISOString().split('T')[0],
+    notes: '',
+    imageUrl: '',
+    items: [{ canvasSizeId: '', frameOptionId: '', title: '', quantity: 1, salePrice: '' }],
+  });
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
@@ -165,6 +182,37 @@ export default function OrdersPage() {
       fetchFormData();
     }
   }, [showAddDialog]);
+
+  // Düzenleme modal'ı açıldığında formu doldur
+  useEffect(() => {
+    if (editingOrder) {
+      setEditOrderForm({
+        storeId: editingOrder.store?.id || '',
+        orderNumber: editingOrder.orderNumber || '',
+        customerName: editingOrder.customerName || '',
+        customerEmail: editingOrder.customerEmail || '',
+        countryId: editingOrder.countryId || '',
+        shippingAddress: editingOrder.shippingAddress || '',
+        salePrice: editingOrder.salePrice?.toString() || '',
+        saleCurrency: editingOrder.saleCurrency || 'USD',
+        orderDate: editingOrder.orderDate ? new Date(editingOrder.orderDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        notes: editingOrder.notes || '',
+        imageUrl: editingOrder.imageUrl || '',
+        items: editingOrder.items && editingOrder.items.length > 0
+          ? editingOrder.items.map((item: any) => ({
+              canvasSizeId: item.canvasSizeId || '',
+              frameOptionId: item.frameOptionId || '',
+              title: item.title || '',
+              quantity: item.quantity || 1,
+              salePrice: item.salePrice?.toString() || '',
+            }))
+          : [{ canvasSizeId: '', frameOptionId: '', title: '', quantity: 1, salePrice: '' }],
+      });
+      if (canvasSizes.length === 0) {
+        fetchFormData();
+      }
+    }
+  }, [editingOrder]);
 
   const fetchOrders = async () => {
     setPageLoading(true);
@@ -468,6 +516,29 @@ export default function OrdersPage() {
     }
   };
 
+  const updateOrder = async (orderData: any) => {
+    if (!editingOrder) return;
+
+    try {
+      const res = await fetch(`/api/orders/${editingOrder.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderData),
+      });
+
+      if (res.ok) {
+        toast.success('Sipariş güncellendi');
+        fetchOrders();
+        setEditingOrder(null);
+      } else {
+        const error = await res.json();
+        toast.error(error.error || 'Güncelleme başarısız');
+      }
+    } catch (error) {
+      toast.error('Bir hata oluştu');
+    }
+  };
+
   // Toplam kar/zarar hesapla
   const totalProfit = sortedOrders.reduce((sum, o) => sum + (o.netProfit || 0), 0);
   const totalRevenue = sortedOrders.reduce((sum, o) => sum + (o.salePrice || 0), 0);
@@ -724,6 +795,10 @@ export default function OrdersPage() {
                             <Eye className="mr-2 h-4 w-4" />
                             Detay
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setEditingOrder(order)}>
+                            <Edit className="mr-2 h-4 w-4" />
+                            Düzenle
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleSinglePDF(order)}>
                             <FileDown className="mr-2 h-4 w-4" />
                             PDF İndir
@@ -907,6 +982,230 @@ export default function OrdersPage() {
                   onClick={() => handleSinglePDF(selectedOrder)}
                 >
                   <FileDown className="mr-2 h-4 w-4" /> PDF İndir
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Sipariş Düzenleme Dialog */}
+      <Dialog open={!!editingOrder} onOpenChange={() => setEditingOrder(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Sipariş Düzenle</DialogTitle>
+          </DialogHeader>
+          {editingOrder && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Mağaza *</label>
+                  <Select value={editOrderForm.storeId} onValueChange={(v) => setEditOrderForm({ ...editOrderForm, storeId: v })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seçin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stores.map((store) => (
+                        <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Sipariş No *</label>
+                  <Input
+                    placeholder="ETY-2024-001"
+                    value={editOrderForm.orderNumber}
+                    onChange={(e) => setEditOrderForm({ ...editOrderForm, orderNumber: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Müşteri Adı *</label>
+                  <Input
+                    placeholder="John Doe"
+                    value={editOrderForm.customerName}
+                    onChange={(e) => setEditOrderForm({ ...editOrderForm, customerName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Kargo Ülkesi</label>
+                  <Select value={editOrderForm.countryId} onValueChange={(v) => setEditOrderForm({ ...editOrderForm, countryId: v })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seçin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {countries.map((country) => (
+                        <SelectItem key={country.id} value={country.id}>{country.name} ({country.code})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Teslimat Adresi *</label>
+                <textarea
+                  className="w-full min-h-[80px] px-3 py-2 text-sm border rounded-md"
+                  placeholder="Tam adres bilgisi"
+                  value={editOrderForm.shippingAddress}
+                  onChange={(e) => setEditOrderForm({ ...editOrderForm, shippingAddress: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Toplam Satış Fiyatı (USD) *</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="49.99"
+                    value={editOrderForm.salePrice}
+                    onChange={(e) => setEditOrderForm({ ...editOrderForm, salePrice: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Sipariş Tarihi</label>
+                  <Input
+                    type="date"
+                    value={editOrderForm.orderDate}
+                    onChange={(e) => setEditOrderForm({ ...editOrderForm, orderDate: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Ürün Görseli (Opsiyonel)</label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Link className="h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Görsel URL'si yapıştırın"
+                    value={editOrderForm.imageUrl}
+                    onChange={(e) => setEditOrderForm({ ...editOrderForm, imageUrl: e.target.value })}
+                  />
+                </div>
+                {editOrderForm.imageUrl && (
+                  <div className="border rounded bg-background p-2 mt-2">
+                    <img 
+                      src={editOrderForm.imageUrl} 
+                      alt="Önizleme" 
+                      className="max-h-40 object-contain mx-auto"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Ürünler */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-sm font-medium">Ürünler *</label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditOrderForm({
+                      ...editOrderForm,
+                      items: [...editOrderForm.items, { canvasSizeId: '', frameOptionId: '', title: '', quantity: 1, salePrice: '' }],
+                    })}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Ürün Ekle
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {editOrderForm.items.map((item, index) => (
+                    <div key={index} className="border rounded-lg p-3 space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium">Ürün {index + 1}</span>
+                        {editOrderForm.items.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const newItems = editOrderForm.items.filter((_, i) => i !== index);
+                              setEditOrderForm({ ...editOrderForm, items: newItems });
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                      <Input
+                        placeholder="Ürün başlığı"
+                        value={item.title}
+                        onChange={(e) => {
+                          const newItems = [...editOrderForm.items];
+                          newItems[index] = { ...newItems[index], title: e.target.value };
+                          setEditOrderForm({ ...editOrderForm, items: newItems });
+                        }}
+                      />
+                      <div className="grid grid-cols-3 gap-2">
+                        <Select 
+                          value={item.canvasSizeId} 
+                          onValueChange={(v) => {
+                            const newItems = [...editOrderForm.items];
+                            newItems[index] = { ...newItems[index], canvasSizeId: v };
+                            setEditOrderForm({ ...editOrderForm, items: newItems });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Boyut" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {canvasSizes.map((size) => (
+                              <SelectItem key={size.id} value={size.id}>{size.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Select 
+                          value={item.frameOptionId} 
+                          onValueChange={(v) => {
+                            const newItems = [...editOrderForm.items];
+                            newItems[index] = { ...newItems[index], frameOptionId: v };
+                            setEditOrderForm({ ...editOrderForm, items: newItems });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Çerçeve" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {frameOptions.map((frame) => (
+                              <SelectItem key={frame.id} value={frame.id}>{frame.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number"
+                          min="1"
+                          placeholder="Adet"
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const newItems = [...editOrderForm.items];
+                            newItems[index] = { ...newItems[index], quantity: parseInt(e.target.value) || 1 };
+                            setEditOrderForm({ ...editOrderForm, items: newItems });
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <Button variant="outline" className="flex-1" onClick={() => setEditingOrder(null)}>
+                  İptal
+                </Button>
+                <Button 
+                  className="flex-1" 
+                  onClick={() => updateOrder(editOrderForm)} 
+                  disabled={loading}
+                >
+                  {loading ? 'Güncelleniyor...' : 'Güncelle'}
                 </Button>
               </div>
             </div>

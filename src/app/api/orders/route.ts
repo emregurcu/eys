@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
         netProfit: true,
         profitMargin: true,
         orderDate: true,
+        countryId: true,
         store: { select: { id: true, name: true } },
         country: { select: { name: true, code: true } },
         items: {
