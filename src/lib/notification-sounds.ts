@@ -1,60 +1,30 @@
 /**
- * Bildirim sesleri - Web Audio API ile kısa tonlar
- * Sipariş ve sorun bildirimleri için farklı sesler
+ * Bildirim sesleri - MP3 dosyaları
+ * public/sound/ altında money.mp3 (sipariş) ve warning.mp3 (sorun) kullanılır.
  */
 
-let audioContext: AudioContext | null = null;
+const ORDER_SOUND_PATH = '/sound/money.mp3';
+const ISSUE_SOUND_PATH = '/sound/warning.mp3';
 
-function getAudioContext(): AudioContext {
-  if (typeof window === 'undefined') throw new Error('Window undefined');
-  if (!audioContext) {
-    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-  }
-  return audioContext;
-}
-
-function playTone(
-  frequency: number,
-  duration: number,
-  type: OscillatorType = 'sine',
-  volume: number = 0.15
-) {
+function playMp3(path: string): HTMLAudioElement | null {
+  if (typeof window === 'undefined') return null;
   try {
-    const ctx = getAudioContext();
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    oscillator.frequency.value = frequency;
-    oscillator.type = type;
-    gainNode.gain.setValueAtTime(volume, ctx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
-
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + duration);
+    const audio = new Audio(path);
+    audio.volume = 0.7;
+    audio.play().catch((e) => console.warn('Bildirim sesi çalınamadı:', e));
+    return audio;
   } catch (e) {
     console.warn('Bildirim sesi çalınamadı:', e);
+    return null;
   }
 }
 
 /** Sipariş bildirimi sesi (yeni sipariş / durum değişikliği) */
 export function playOrderNotificationSound() {
-  try {
-    playTone(523.25, 0.12, 'sine', 0.12); // C5
-    setTimeout(() => playTone(659.25, 0.15, 'sine', 0.12), 100); // E5
-  } catch (e) {
-    console.warn('Sipariş sesi çalınamadı:', e);
-  }
+  playMp3(ORDER_SOUND_PATH);
 }
 
 /** Sorun bildirimi sesi */
 export function playIssueNotificationSound() {
-  try {
-    playTone(392, 0.15, 'square', 0.08); // G4
-    setTimeout(() => playTone(349.23, 0.2, 'square', 0.08), 120); // F4
-  } catch (e) {
-    console.warn('Sorun sesi çalınamadı:', e);
-  }
+  playMp3(ISSUE_SOUND_PATH);
 }
