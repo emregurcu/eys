@@ -38,12 +38,17 @@ export default function SettingsPage() {
   });
 
   const [pushBusy, setPushBusy] = useState(false);
+  const [vapidReady, setVapidReady] = useState<boolean | null>(null);
   const [orderNotificationEmail, setOrderNotificationEmail] = useState('');
   const [systemSettingsLoading, setSystemSettingsLoading] = useState(false);
   const [systemSettingsSaving, setSystemSettingsSaving] = useState(false);
 
   useEffect(() => {
     checkPushStatus();
+    fetch('/api/push/public-key')
+      .then((r) => r.json())
+      .then((data) => setVapidReady(!!data?.publicKey))
+      .catch(() => setVapidReady(false));
   }, []);
 
   useEffect(() => {
@@ -99,7 +104,7 @@ export default function SettingsPage() {
       const keyData = await keyRes.json();
       const publicKey = keyData.publicKey;
       if (!publicKey) {
-        toast.error('VAPID anahtarı eksik');
+        toast.error('VAPID anahtarı eksik. Proje klasöründe npm run generate-vapid çalıştırıp .env ve Vercel ortam değişkenlerine ekleyin.');
         return;
       }
 
@@ -281,6 +286,15 @@ export default function SettingsPage() {
 
           <div className="border-t pt-4">
             <p className="font-medium mb-3">Bildirim Kanalları</p>
+            {vapidReady === false && (
+              <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                <p className="font-medium">Push için VAPID anahtarı gerekli</p>
+                <p className="mt-1 text-xs">
+                  Proje klasöründe <code className="rounded bg-amber-100 px-1 dark:bg-amber-900">npm run generate-vapid</code> çalıştırın.
+                  Çıkan değerleri .env dosyasına ve Vercel → Settings → Environment Variables bölümüne ekleyin, ardından sunucuyu yeniden başlatın.
+                </p>
+              </div>
+            )}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
