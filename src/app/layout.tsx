@@ -7,18 +7,22 @@ import { Toaster } from 'sonner';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Etsy Mağaza Yönetimi',
-  description: 'Birden fazla Etsy mağazasını tek panelden yönetin',
+  title: 'DMT Sipariş Yönetimi',
+  description: 'Sipariş ve mağaza yönetim paneli',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Etsy Yönetim',
+    title: 'DMT Sipariş',
+  },
+  icons: {
+    icon: '/favicon.svg',
+    apple: '/icons/icon-192x192.svg',
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#F1641E',
+  themeColor: '#F97316',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -33,8 +37,7 @@ export default function RootLayout({
   return (
     <html lang="tr" suppressHydrationWarning>
       <head>
-        <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <link rel="apple-touch-icon" href="/icons/icon-192x192.svg" />
       </head>
       <body className={inter.className}>
         <Providers>

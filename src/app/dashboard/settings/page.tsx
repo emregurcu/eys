@@ -127,8 +127,9 @@ export default function SettingsPage() {
 
       setNotifications((prev) => ({ ...prev, push: true }));
       toast.success('Push bildirimleri aktif');
-    } catch (error) {
-      toast.error('Push aktif edilemedi');
+    } catch (error: any) {
+      console.error('Push error:', error);
+      toast.error(`Push aktif edilemedi: ${error?.message || error}`);
     }
     setPushBusy(false);
   };
