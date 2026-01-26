@@ -196,11 +196,11 @@ export async function notifyNewOrder(order: any) {
     });
     const storeEmail = store?.notificationEmail?.trim() || null;
 
-    const emails = [...new Set([
+    const emails = Array.from(new Set([
       ...admins.map(a => a.email).filter(Boolean) as string[],
       ...(systemEmail ? [systemEmail] : []),
       ...(storeEmail ? [storeEmail] : []),
-    ])];
+    ]));
 
     if (emails.length > 0) {
       const template = newOrderEmailTemplate(order);
@@ -331,7 +331,7 @@ export async function notifyTrackingAdded(
     ]);
     const managerEmails = managers.map((m) => m.user.email).filter(Boolean) as string[];
     const storeEmail = store?.notificationEmail?.trim();
-    const emails = [...new Set([...managerEmails, ...(storeEmail ? [storeEmail] : [])])];
+    const emails = Array.from(new Set([...managerEmails, ...(storeEmail ? [storeEmail] : [])]));
     if (emails.length === 0) return null;
 
     const template = trackingAddedEmailTemplate(order, trackingNumber, trackingCompany);
