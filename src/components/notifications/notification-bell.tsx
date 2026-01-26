@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -11,6 +11,7 @@ import { Bell, Check, Trash2, ShoppingCart, AlertTriangle, CreditCard, Settings 
 import { formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import Link from 'next/link';
+import { playOrderNotificationSound, playIssueNotificationSound } from '@/lib/notification-sounds';
 
 interface Notification {
   id: string;
@@ -43,31 +44,55 @@ const typeColors: Record<string, string> = {
   SYSTEM: 'bg-gray-100 text-gray-600',
 };
 
+const POLL_INTERVAL_MS = 20000; // 20 saniyede bir anlık kontrol
+
 export function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const prevUnreadIdsRef = useRef<Set<string>>(new Set());
+  const isFirstFetch = useRef(true);
 
-  const fetchNotifications = useCallback(async () => {
-    if (loading) return;
+  const fetchNotifications = useCallback(async (silent = false) => {
+    if (loading && !silent) return;
     try {
-      const res = await fetch('/api/notifications?limit=10');
+      if (!silent) setLoading(true);
+      const res = await fetch('/api/notifications?limit=15');
       if (res.ok) {
         const data = await res.json();
-        setNotifications(data.notifications || []);
-        setUnreadCount(data.unreadCount || 0);
+        const list: Notification[] = data.notifications || [];
+        const newUnreadCount = data.unreadCount || 0;
+        const unreadIds = new Set(
+          list.filter((n: Notification) => !n.isRead).map((n: Notification) => n.id)
+        );
+
+        // Yeni gelen okunmamış bildirimde ses çal (ilk yüklemede değil)
+        if (!isFirstFetch.current) {
+          const prev = prevUnreadIdsRef.current;
+          const newestNewUnread = list.find((n: Notification) => !n.isRead && !prev.has(n.id));
+          if (newestNewUnread) {
+            const isOrder = newestNewUnread.type === 'NEW_ORDER' || newestNewUnread.type === 'ORDER_STATUS';
+            if (isOrder) playOrderNotificationSound();
+            else if (newestNewUnread.type.startsWith('ISSUE_')) playIssueNotificationSound();
+          }
+        }
+        isFirstFetch.current = false;
+        prevUnreadIdsRef.current = unreadIds;
+
+        setNotifications(list);
+        setUnreadCount(newUnreadCount);
       }
     } catch (error) {
       console.error('Bildirimler yüklenemedi');
+    } finally {
+      if (!silent) setLoading(false);
     }
   }, [loading]);
 
   useEffect(() => {
-    fetchNotifications();
-    
-    // Saatte bir kontrol et (3600000ms = 1 saat)
-    const interval = setInterval(fetchNotifications, 3600000);
+    fetchNotifications(true);
+    const interval = setInterval(() => fetchNotifications(true), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
 

@@ -184,9 +184,9 @@ export async function PUT(
       },
     });
 
-    // Durum değiştiyse bildirim gönder
+    // Durum değiştiyse mağaza ve yöneticisine bildirim (değişikliği yapan hariç)
     if (status && existingOrder && existingOrder.status !== status) {
-      await notifyOrderStatusChange(order, status);
+      await notifyOrderStatusChange(order, status, session.user.id);
     }
 
     return NextResponse.json(order);

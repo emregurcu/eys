@@ -41,31 +41,37 @@ export async function createNotification(params: CreateNotificationParams) {
   }
 }
 
-// Mağaza yöneticilerine bildirim gönder
+// Mağaza yöneticilerine bildirim gönder (opsiyonel: adminleri dahil etme, hariç tutulacak kullanıcılar)
 export async function notifyStoreManagers(
   storeId: string,
   type: NotificationType,
   title: string,
   message: string,
-  data?: any
+  data?: any,
+  options?: { excludeUserIds?: string[]; includeAdmins?: boolean }
 ) {
   try {
+    const excludeUserIds = options?.excludeUserIds ?? [];
+    const includeAdmins = options?.includeAdmins !== false;
+
     // Mağaza yöneticilerini bul
     const managers = await prisma.storeManager.findMany({
       where: { storeId },
       select: { userId: true },
     });
 
-    // Adminleri de bul
-    const admins = await prisma.user.findMany({
-      where: { role: 'ADMIN', isActive: true },
-      select: { id: true },
-    });
-
-    // Benzersiz kullanıcı listesi
+    const exclude = new Set(excludeUserIds);
     const userIdSet = new Set<string>();
-    managers.forEach(m => userIdSet.add(m.userId));
-    admins.forEach(a => userIdSet.add(a.id));
+    managers.forEach(m => { if (!exclude.has(m.userId)) userIdSet.add(m.userId); });
+
+    if (includeAdmins) {
+      const admins = await prisma.user.findMany({
+        where: { role: 'ADMIN', isActive: true },
+        select: { id: true },
+      });
+      admins.forEach(a => { if (!exclude.has(a.id)) userIdSet.add(a.id); });
+    }
+
     const userIds = Array.from(userIdSet);
 
     // Bildirimleri oluştur
@@ -109,7 +115,7 @@ export async function notifyStoreManagers(
   }
 }
 
-// Tüm adminlere bildirim gönder
+// Tüm adminlere bildirim gönder (in-app + push)
 export async function notifyAdmins(
   type: NotificationType,
   title: string,
@@ -132,6 +138,23 @@ export async function notifyAdmins(
       })),
     });
 
+    const url =
+      type === 'NEW_ORDER' || type === 'ORDER_STATUS'
+        ? '/dashboard/orders'
+        : type.startsWith('ISSUE_')
+        ? '/dashboard/issues'
+        : '/dashboard/notifications';
+
+    try {
+      await Promise.allSettled(
+        admins.map((admin) =>
+          sendPushToUser(admin.id, { title, body: message, url })
+        )
+      );
+    } catch (pushError) {
+      console.error('Push gönderimi başarısız:', pushError);
+    }
+
     return notifications;
   } catch (error) {
     console.error('Notify admins error:', error);
@@ -139,11 +162,20 @@ export async function notifyAdmins(
   }
 }
 
-// Sipariş bildirimleri
+// Sipariş bildirimleri — mağaza yöneticileri + admin anlık bildirim
 export async function notifyNewOrder(order: any) {
-  // In-app bildirim
+  // In-app: mağaza yöneticileri (adminleri ayrıca notifyAdmins ile gönderiyoruz)
   const notification = await notifyStoreManagers(
     order.storeId,
+    'NEW_ORDER',
+    'Yeni Sipariş',
+    `${order.customerName} - ${order.orderNumber} (${order.salePrice} ${order.saleCurrency})`,
+    { orderId: order.id, orderNumber: order.orderNumber },
+    { includeAdmins: false }
+  );
+
+  // Adminlere anlık bildirim
+  await notifyAdmins(
     'NEW_ORDER',
     'Yeni Sipariş',
     `${order.customerName} - ${order.orderNumber} (${order.salePrice} ${order.saleCurrency})`,
@@ -169,7 +201,12 @@ export async function notifyNewOrder(order: any) {
   return notification;
 }
 
-export async function notifyOrderStatusChange(order: any, newStatus: string) {
+// Sipariş durumu değişince: mağaza + mağaza yöneticisine bildirim (değişikliği yapan hariç)
+export async function notifyOrderStatusChange(
+  order: any,
+  newStatus: string,
+  excludeUserId?: string
+) {
   const statusLabels: Record<string, string> = {
     NEW: 'Yeni',
     PROCESSING: 'İşleniyor',
@@ -180,13 +217,14 @@ export async function notifyOrderStatusChange(order: any, newStatus: string) {
     PROBLEM: 'Problem',
   };
 
-  // In-app bildirim
+  // In-app: mağaza yöneticileri + adminler (değişikliği yapan hariç)
   const notification = await notifyStoreManagers(
     order.storeId,
     'ORDER_STATUS',
     'Sipariş Durumu Değişti',
     `${order.orderNumber} → ${statusLabels[newStatus] || newStatus}`,
-    { orderId: order.id, orderNumber: order.orderNumber, status: newStatus }
+    { orderId: order.id, orderNumber: order.orderNumber, status: newStatus },
+    { excludeUserIds: excludeUserId ? [excludeUserId] : [], includeAdmins: true }
   );
 
   // Email bildirim - Sadece önemli durumlar için (SHIPPED, DELIVERED, PROBLEM)
@@ -210,11 +248,20 @@ export async function notifyOrderStatusChange(order: any, newStatus: string) {
   return notification;
 }
 
-// Sorun bildirimleri
+// Sorun bildirimleri — admin + mağaza yöneticileri anlık bildirim
 export async function notifyIssueCreated(issue: any) {
-  // In-app bildirim
+  // In-app: mağaza yöneticileri (adminleri ayrıca notifyAdmins ile)
   const notification = await notifyStoreManagers(
     issue.storeId,
+    'ISSUE_CREATED',
+    'Yeni Sorun Kaydı',
+    issue.title,
+    { issueId: issue.id },
+    { includeAdmins: false }
+  );
+
+  // Adminlere her zaman bildirim
+  await notifyAdmins(
     'ISSUE_CREATED',
     'Yeni Sorun Kaydı',
     issue.title,
