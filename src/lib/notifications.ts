@@ -1,6 +1,7 @@
 import prisma from './prisma';
-import { sendEmail, newOrderEmailTemplate, orderStatusEmailTemplate, newIssueEmailTemplate } from './email';
+import { sendEmail, newOrderEmailTemplate, orderStatusEmailTemplate, newIssueEmailTemplate, trackingAddedEmailTemplate } from './email';
 import { sendPushToUser } from './push';
+import { getOrderNotificationEmail } from './system-settings';
 
 export type NotificationType = 
   | 'NEW_ORDER'
@@ -182,14 +183,25 @@ export async function notifyNewOrder(order: any) {
     { orderId: order.id, orderNumber: order.orderNumber }
   );
 
-  // Email bildirim - Admin'lere gönder
+  // Email bildirim - Admin + sistem ayarı + mağaza bildirim maili
   try {
     const admins = await prisma.user.findMany({
       where: { role: 'ADMIN', isActive: true, email: { not: '' } },
       select: { email: true },
     });
-    
-    const emails = admins.map(a => a.email).filter(Boolean) as string[];
+    const systemEmail = await getOrderNotificationEmail();
+    const store = await prisma.store.findUnique({
+      where: { id: order.storeId },
+      select: { notificationEmail: true },
+    });
+    const storeEmail = store?.notificationEmail?.trim() || null;
+
+    const emails = [...new Set([
+      ...admins.map(a => a.email).filter(Boolean) as string[],
+      ...(systemEmail ? [systemEmail] : []),
+      ...(storeEmail ? [storeEmail] : []),
+    ])];
+
     if (emails.length > 0) {
       const template = newOrderEmailTemplate(order);
       await sendEmail({ to: emails, ...template });
@@ -298,4 +310,35 @@ export async function notifyIssueAssigned(issue: any, assignedUserId: string) {
     message: issue.title,
     data: { issueId: issue.id },
   });
+}
+
+// Takip kodu girildiğinde o mağazanın yöneticilerine + mağaza bildirim mailine gönder
+export async function notifyTrackingAdded(
+  order: any,
+  trackingNumber: string,
+  trackingCompany?: string | null
+) {
+  try {
+    const [managers, store] = await Promise.all([
+      prisma.storeManager.findMany({
+        where: { storeId: order.storeId },
+        select: { user: { select: { email: true } } },
+      }),
+      prisma.store.findUnique({
+        where: { id: order.storeId },
+        select: { notificationEmail: true },
+      }),
+    ]);
+    const managerEmails = managers.map((m) => m.user.email).filter(Boolean) as string[];
+    const storeEmail = store?.notificationEmail?.trim();
+    const emails = [...new Set([...managerEmails, ...(storeEmail ? [storeEmail] : [])])];
+    if (emails.length === 0) return null;
+
+    const template = trackingAddedEmailTemplate(order, trackingNumber, trackingCompany);
+    await sendEmail({ to: emails, ...template });
+    return { sent: emails.length };
+  } catch (error) {
+    console.error('Takip maili gönderme hatası:', error);
+    return null;
+  }
 }

@@ -42,6 +42,7 @@ interface StoreData {
   etsyPaymentFee: number;
   etsyListingFee: number;
   etsyApiKey: string | null;
+  notificationEmail: string | null;
   managers: { user: { id: string; name: string } }[];
   _count: { orders: number };
 }
@@ -60,6 +61,7 @@ export default function StoresPage() {
     etsyShopId: '',
     etsyApiKey: '',
     etsyApiSecret: '',
+    notificationEmail: '',
     currency: 'USD',
     etsyTransactionFee: '6.5',
     etsyPaymentFee: '4',
@@ -89,6 +91,7 @@ export default function StoresPage() {
         etsyShopId: store.etsyShopId,
         etsyApiKey: '',
         etsyApiSecret: '',
+        notificationEmail: store.notificationEmail || '',
         currency: store.currency,
         etsyTransactionFee: store.etsyTransactionFee.toString(),
         etsyPaymentFee: store.etsyPaymentFee.toString(),
@@ -101,6 +104,7 @@ export default function StoresPage() {
         etsyShopId: '',
         etsyApiKey: '',
         etsyApiSecret: '',
+        notificationEmail: '',
         currency: 'USD',
         etsyTransactionFee: '6.5',
         etsyPaymentFee: '4',
@@ -128,6 +132,7 @@ export default function StoresPage() {
         etsyTransactionFee: parseFloat(form.etsyTransactionFee),
         etsyPaymentFee: parseFloat(form.etsyPaymentFee),
         etsyListingFee: parseFloat(form.etsyListingFee),
+        notificationEmail: form.notificationEmail.trim() || null,
       };
 
       if (form.etsyApiKey) body.etsyApiKey = form.etsyApiKey;
@@ -345,6 +350,16 @@ export default function StoresPage() {
                   onChange={(e) => setForm({ ...form, etsyApiSecret: e.target.value })}
                 />
               </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Bildirim e-postası</label>
+              <Input
+                type="email"
+                placeholder="mağaza@gmail.com (sipariş/takip mailleri buraya gider)"
+                value={form.notificationEmail}
+                onChange={(e) => setForm({ ...form, notificationEmail: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground mt-1">Webhook mağaza eşlemesi ve sipariş/takip bildirimleri bu adrese de gider.</p>
             </div>
 
             <div className="border-t pt-4">

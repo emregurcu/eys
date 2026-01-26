@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { notifyStoreManagers } from '@/lib/notifications';
+import { notifyNewOrder } from '@/lib/notifications';
 
 // Webhook secret key for security
 const WEBHOOK_SECRET = process.env.ETSY_MAIL_WEBHOOK_SECRET || 'etsy-webhook-secret-key';
@@ -55,11 +55,12 @@ export async function POST(req: NextRequest) {
       customerName: data.customerName,
     });
 
-    // Find store by email
+    // Find store by email (notificationEmail, etsyApiKey veya name ile eşleşme)
     const store = await prisma.store.findFirst({
       where: {
         OR: [
-          { etsyApiKey: data.storeEmail }, // Using etsyApiKey field to store email temporarily
+          { notificationEmail: data.storeEmail },
+          { etsyApiKey: data.storeEmail },
           { name: { contains: data.storeEmail.split('@')[0] } },
         ],
       },
@@ -170,23 +171,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Send notification with more details
-    const notificationMsg = `${data.customerName} - ${data.orderNumber} ($${data.totalPrice})${data.dimensions ? ` - ${data.dimensions}` : ''}${data.frameOption ? ` - ${data.frameOption}` : ''}`;
-    
-    await notifyStoreManagers(
-      store.id,
-      'NEW_ORDER',
-      'Yeni Etsy Siparişi (Mail)',
-      notificationMsg,
-      { 
-        orderId: order.id, 
-        orderNumber: order.orderNumber, 
-        source: 'email',
-        dimensions: data.dimensions,
-        frameOption: data.frameOption,
-        shippingAddress: data.shippingAddress,
-      }
-    );
+    await notifyNewOrder(order);
 
     return NextResponse.json({ 
       success: true, 

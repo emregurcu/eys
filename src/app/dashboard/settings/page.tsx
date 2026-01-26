@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,9 +21,13 @@ import {
   Palette,
   Shield,
   Smartphone,
+  Mail,
 } from 'lucide-react';
 
 export default function SettingsPage() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === 'ADMIN';
+
   const [notifications, setNotifications] = useState({
     newOrder: true,
     shippingIssue: true,
@@ -33,10 +38,26 @@ export default function SettingsPage() {
   });
 
   const [pushBusy, setPushBusy] = useState(false);
+  const [orderNotificationEmail, setOrderNotificationEmail] = useState('');
+  const [systemSettingsLoading, setSystemSettingsLoading] = useState(false);
+  const [systemSettingsSaving, setSystemSettingsSaving] = useState(false);
 
   useEffect(() => {
     checkPushStatus();
   }, []);
+
+  useEffect(() => {
+    if (isAdmin) {
+      setSystemSettingsLoading(true);
+      fetch('/api/settings')
+        .then((r) => r.json())
+        .then((data) => {
+          setOrderNotificationEmail(data.orderNotificationEmail || '');
+        })
+        .catch(() => toast.error('Sistem ayarları yüklenemedi'))
+        .finally(() => setSystemSettingsLoading(false));
+    }
+  }, [isAdmin]);
 
   const checkPushStatus = async () => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -136,6 +157,25 @@ export default function SettingsPage() {
 
   const handleSave = () => {
     toast.success('Ayarlar kaydedildi');
+  };
+
+  const handleSaveSystemSettings = async () => {
+    setSystemSettingsSaving(true);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderNotificationEmail: orderNotificationEmail.trim() || null }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setOrderNotificationEmail(data.orderNotificationEmail || '');
+      toast.success('Sistem ayarları kaydedildi');
+    } catch {
+      toast.error('Kaydedilemedi');
+    } finally {
+      setSystemSettingsSaving(false);
+    }
   };
 
   return (
@@ -324,6 +364,35 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Sistem ayarları - sadece Admin */}
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-muted-foreground" />
+              <CardTitle className="text-lg">Sistem</CardTitle>
+            </div>
+            <CardDescription>Sipariş bildirim e-postası (her siparişte bu adrese mail gider)</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Sipariş bildirim e-postası</label>
+              <Input
+                type="email"
+                placeholder="siparis@ornek.com"
+                value={orderNotificationEmail}
+                onChange={(e) => setOrderNotificationEmail(e.target.value)}
+                disabled={systemSettingsLoading}
+                className="mt-2 max-w-md"
+              />
+            </div>
+            <Button onClick={handleSaveSystemSettings} disabled={systemSettingsSaving || systemSettingsLoading}>
+              {systemSettingsSaving ? 'Kaydediliyor...' : 'Kaydet'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* PWA Kurulum */}
       <Card>

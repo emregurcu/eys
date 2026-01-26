@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSession } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -47,6 +48,7 @@ const typeColors: Record<string, string> = {
 const POLL_INTERVAL_MS = 20000; // 20 saniyede bir anlık kontrol
 
 export function NotificationBell() {
+  const { data: session } = useSession();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
@@ -67,14 +69,14 @@ export function NotificationBell() {
           list.filter((n: Notification) => !n.isRead).map((n: Notification) => n.id)
         );
 
-        // Yeni gelen okunmamış bildirimde ses çal (ilk yüklemede değil)
-        if (!isFirstFetch.current) {
+        // Sadece admin için ve sadece yeni sipariş / yeni sorun bildiriminde ses çal
+        const isAdmin = session?.user?.role === 'ADMIN';
+        if (!isFirstFetch.current && isAdmin) {
           const prev = prevUnreadIdsRef.current;
           const newestNewUnread = list.find((n: Notification) => !n.isRead && !prev.has(n.id));
           if (newestNewUnread) {
-            const isOrder = newestNewUnread.type === 'NEW_ORDER' || newestNewUnread.type === 'ORDER_STATUS';
-            if (isOrder) playOrderNotificationSound();
-            else if (newestNewUnread.type.startsWith('ISSUE_')) playIssueNotificationSound();
+            if (newestNewUnread.type === 'NEW_ORDER') playOrderNotificationSound();
+            else if (newestNewUnread.type === 'ISSUE_CREATED') playIssueNotificationSound();
           }
         }
         isFirstFetch.current = false;
@@ -88,7 +90,7 @@ export function NotificationBell() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [loading]);
+  }, [loading, session?.user?.role]);
 
   useEffect(() => {
     fetchNotifications(true);

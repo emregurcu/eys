@@ -40,7 +40,7 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const { name, etsyShopId, etsyApiKey, etsyApiSecret, currency, isActive, etsyTransactionFee, etsyPaymentFee, etsyListingFee } = body;
+    const { name, etsyShopId, etsyApiKey, etsyApiSecret, currency, isActive, etsyTransactionFee, etsyPaymentFee, etsyListingFee, notificationEmail } = body;
 
     const store = await prisma.store.update({
       where: { id: params.id },
@@ -54,6 +54,7 @@ export async function PUT(
         etsyTransactionFee,
         etsyPaymentFee,
         etsyListingFee,
+        notificationEmail: notificationEmail !== undefined ? (notificationEmail?.trim() || null) : undefined,
       },
     });
 

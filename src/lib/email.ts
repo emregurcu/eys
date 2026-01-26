@@ -133,6 +133,33 @@ export function newIssueEmailTemplate(issue: any) {
   };
 }
 
+// Takip kodu eklendi – mağaza yöneticisine mail
+export function trackingAddedEmailTemplate(
+  order: any,
+  trackingNumber: string,
+  trackingCompany?: string | null
+) {
+  const storeName = order.store?.name || 'Mağaza';
+  return {
+    subject: `Takip kodu eklendi: ${order.orderNumber} (${storeName})`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Siparişinize takip kodu eklendi</h2>
+        <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; border-left: 4px solid #0284c7;">
+          <p><strong>Sipariş No:</strong> ${order.orderNumber}</p>
+          <p><strong>Mağaza:</strong> ${storeName}</p>
+          <p><strong>Müşteri:</strong> ${order.customerName}</p>
+          <p><strong>Takip No:</strong> ${trackingNumber}</p>
+          ${trackingCompany ? `<p><strong>Kargo firması:</strong> ${trackingCompany}</p>` : ''}
+        </div>
+        <p style="color: #666; font-size: 12px; margin-top: 20px;">
+          Bu email otomatik olarak gönderilmiştir.
+        </p>
+      </div>
+    `,
+  };
+}
+
 // Günlük özet email şablonu
 export function dailySummaryEmailTemplate(stats: {
   totalOrders: number;

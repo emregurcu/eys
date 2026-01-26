@@ -81,6 +81,7 @@ model Store {
   etsyTransactionFee  Float @default(6.5)  // İşlem ücreti %
   etsyPaymentFee      Float @default(4)    // Ödeme işleme ücreti %
   etsyListingFee      Float @default(0.20) // Listeleme ücreti (sabit)
+  notificationEmail   String?  // Sipariş/takip bildirimlerinin gideceği adres (Etsy mağaza maili ile eşleşebilir)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -354,4 +355,12 @@ model Activity {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id])
+}
+
+// Sistem ayarları (key-value, sadece admin)
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String?
+  updatedAt DateTime @updatedAt
 }

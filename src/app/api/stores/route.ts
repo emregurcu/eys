@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, etsyShopId, etsyApiKey, etsyApiSecret, etsyTransactionFee, etsyPaymentFee, etsyListingFee } = body;
+    const { name, etsyShopId, etsyApiKey, etsyApiSecret, etsyTransactionFee, etsyPaymentFee, etsyListingFee, notificationEmail } = body;
 
     if (!name || !etsyShopId) {
       return NextResponse.json({ error: 'Mağaza adı ve Shop ID zorunludur' }, { status: 400 });
@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
         etsyShopId,
         etsyApiKey: etsyApiKey || null,
         etsyApiSecret: etsyApiSecret || null,
+        notificationEmail: notificationEmail?.trim() || null,
         currency: 'USD',
         etsyTransactionFee: etsyTransactionFee ? parseFloat(etsyTransactionFee) : 6.5,
         etsyPaymentFee: etsyPaymentFee ? parseFloat(etsyPaymentFee) : 4,

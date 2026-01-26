@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { notifyOrderStatusChange } from '@/lib/notifications';
+import { notifyOrderStatusChange, notifyTrackingAdded } from '@/lib/notifications';
 import { calculateOrderCosts } from '@/lib/order-costs';
 
 // GET - Tek sipariş getir
@@ -69,7 +69,7 @@ export async function PUT(
       items,
     } = body;
 
-    // Mevcut siparişi al (durum değişikliği ve maliyet hesaplama için)
+    // Mevcut siparişi al (durum değişikliği, takip, maliyet için)
     const existingOrder = await prisma.order.findUnique({
       where: { id: params.id },
       select: { 
@@ -77,6 +77,8 @@ export async function PUT(
         storeId: true,
         salePrice: true,
         countryId: true,
+        trackingNumber: true,
+        trackingCompany: true,
       },
     });
 
@@ -187,6 +189,15 @@ export async function PUT(
     // Durum değiştiyse mağaza ve yöneticisine bildirim (değişikliği yapan hariç)
     if (status && existingOrder && existingOrder.status !== status) {
       await notifyOrderStatusChange(order, status, session.user.id);
+    }
+
+    // Takip ilk kez eklendiyse mağaza yöneticilerine mail
+    const trackingJustAdded =
+      (trackingNumber !== undefined || trackingCompany !== undefined) &&
+      (trackingNumber?.trim() || trackingCompany?.trim()) &&
+      !existingOrder?.trackingNumber?.trim();
+    if (trackingJustAdded && order.trackingNumber?.trim()) {
+      await notifyTrackingAdded(order, order.trackingNumber.trim(), order.trackingCompany);
     }
 
     return NextResponse.json(order);
