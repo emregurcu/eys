@@ -52,6 +52,8 @@ export async function GET(req: NextRequest) {
         orderDate: true,
         countryId: true,
         imageUrl: true,
+        trackingNumber: true,
+        trackingCompany: true,
         store: { select: { id: true, name: true } },
         country: { select: { name: true, code: true } },
         items: {

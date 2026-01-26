@@ -143,6 +143,8 @@ export default function OrdersPage() {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [showBulkEdit, setShowBulkEdit] = useState(false);
+  const [orderForShipping, setOrderForShipping] = useState<Order | null>(null);
+  const [shippingForm, setShippingForm] = useState({ trackingNumber: '', trackingCompany: '' });
   const [editOrderForm, setEditOrderForm] = useState({
     storeId: '',
     orderNumber: '',
@@ -521,6 +523,40 @@ export default function OrdersPage() {
     } catch (error) {
       toast.error('Güncelleme başarısız');
     }
+  };
+
+  const saveTrackingOrder = async () => {
+    if (!orderForShipping) return;
+    if (!shippingForm.trackingNumber.trim()) {
+      toast.error('Takip kodu girin');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/orders/${orderForShipping.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trackingNumber: shippingForm.trackingNumber.trim(),
+          trackingCompany: shippingForm.trackingCompany.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        toast.success('Kargo bilgisi kaydedildi');
+        fetchOrders();
+        setOrderForShipping(null);
+        setShippingForm({ trackingNumber: '', trackingCompany: '' });
+        if (selectedOrder?.id === orderForShipping.id) {
+          setSelectedOrder({ ...selectedOrder, trackingNumber: shippingForm.trackingNumber.trim(), trackingCompany: shippingForm.trackingCompany.trim() || null });
+        }
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Kayıt başarısız');
+      }
+    } catch (error) {
+      toast.error('Bir hata oluştu');
+    }
+    setLoading(false);
   };
 
   const updateOrder = async (orderData: any) => {
@@ -910,7 +946,13 @@ export default function OrdersPage() {
                             <FileDown className="mr-2 h-4 w-4" />
                             PDF İndir
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            setOrderForShipping(order);
+                            setShippingForm({
+                              trackingNumber: order.trackingNumber || '',
+                              trackingCompany: order.trackingCompany || '',
+                            });
+                          }}>
                             <Truck className="mr-2 h-4 w-4" />
                             Kargo Ekle
                           </DropdownMenuItem>
@@ -1010,6 +1052,21 @@ export default function OrdersPage() {
                   <p className="text-sm whitespace-pre-wrap">{selectedOrder.shippingAddress}</p>
                 </div>
               )}
+
+              {/* Kargo Takip */}
+              <div className="border rounded-lg p-4 space-y-2">
+                <h4 className="font-medium">Kargo Takip</h4>
+                {selectedOrder.trackingNumber ? (
+                  <div className="text-sm space-y-1">
+                    <p><span className="text-muted-foreground">Takip Kodu:</span> <span className="font-medium">{selectedOrder.trackingNumber}</span></p>
+                    {selectedOrder.trackingCompany && (
+                      <p><span className="text-muted-foreground">Kargo Firması:</span> {selectedOrder.trackingCompany}</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Takip bilgisi girilmedi.</p>
+                )}
+              </div>
 
               {/* Maliyet Detayları */}
               <div className="border rounded-lg p-4 space-y-2">
@@ -1460,6 +1517,46 @@ export default function OrdersPage() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Kargo Ekle Dialog */}
+      <Dialog open={!!orderForShipping} onOpenChange={(open) => !open && setOrderForShipping(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Kargo Takip Ekle</DialogTitle>
+          </DialogHeader>
+          {orderForShipping && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Sipariş: {orderForShipping.orderNumber}</p>
+              <div>
+                <label className="text-sm font-medium">Takip Kodu *</label>
+                <Input
+                  placeholder="Örn. 1Z999AA10123456784"
+                  value={shippingForm.trackingNumber}
+                  onChange={(e) => setShippingForm({ ...shippingForm, trackingNumber: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Kargo Firması (opsiyonel)</label>
+                <Input
+                  placeholder="Örn. UPS, DHL, Aras Kargo"
+                  value={shippingForm.trackingCompany}
+                  onChange={(e) => setShippingForm({ ...shippingForm, trackingCompany: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" className="flex-1" onClick={() => setOrderForShipping(null)}>
+                  İptal
+                </Button>
+                <Button className="flex-1" onClick={saveTrackingOrder} disabled={loading}>
+                  {loading ? 'Kaydediliyor...' : 'Kaydet'}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

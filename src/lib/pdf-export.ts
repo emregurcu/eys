@@ -152,6 +152,22 @@ export function exportSingleOrderPDF(order: Order) {
     doc.text('Adres bilgisi mevcut degil', 14, y);
     y += 15;
   }
+
+  // Kargo Takip
+  if (order.trackingNumber) {
+    y += 5;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Kargo Takip:', 14, y);
+    doc.setFont('helvetica', 'normal');
+    y += 6;
+    doc.text(`Takip No: ${fixTurkishChars(order.trackingNumber)}`, 14, y);
+    y += 6;
+    if (order.trackingCompany) {
+      doc.text(`Firma: ${fixTurkishChars(order.trackingCompany)}`, 14, y);
+      y += 6;
+    }
+    y += 3;
+  }
   
   // Notlar
   if (order.notes) {
@@ -197,6 +213,7 @@ export function exportOrderListPDF(orders: Order[], title: string = 'Siparis Lis
       'Musteri',
       'Urun (Boyut - Cerceve)',
       'Adres',
+      'Takip',
       'Tarih',
     ]],
     body: orders.map(order => {
@@ -220,6 +237,10 @@ export function exportOrderListPDF(orders: Order[], title: string = 'Siparis Lis
         }
       }
       
+      const tracking = order.trackingNumber
+        ? (order.trackingCompany ? `${fixTurkishChars(order.trackingCompany)}: ` : '') + fixTurkishChars(order.trackingNumber)
+        : '-';
+
       return [
         imageStatus,
         order.orderNumber,
@@ -227,6 +248,7 @@ export function exportOrderListPDF(orders: Order[], title: string = 'Siparis Lis
         fixTurkishChars(order.customerName),
         productInfo,
         fixTurkishChars(order.shippingAddress || '-'),
+        tracking,
         new Date(order.orderDate).toLocaleDateString('tr-TR'),
       ];
     }),
@@ -238,8 +260,9 @@ export function exportOrderListPDF(orders: Order[], title: string = 'Siparis Lis
       2: { cellWidth: 30 },
       3: { cellWidth: 35 },
       4: { cellWidth: 50 },
-      5: { cellWidth: 80 },
-      6: { cellWidth: 22 },
+      5: { cellWidth: 70 },
+      6: { cellWidth: 38 },
+      7: { cellWidth: 22 },
     },
     didParseCell: function (data: any) {
       // Görsel kolonunda metni gizle (görsel eklenecek)
