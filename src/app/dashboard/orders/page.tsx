@@ -43,6 +43,7 @@ import {
   Square,
   Upload,
   X,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -751,6 +752,13 @@ export default function OrdersPage() {
               <Edit className="mr-2 h-4 w-4" /> Toplu Düzenle ({selectedOrders.size})
             </Button>
           )}
+          <Button 
+            variant="outline" 
+            onClick={() => { fetchOrders(); toast.success('Liste yenilendi'); }}
+            disabled={pageLoading}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${pageLoading ? 'animate-spin' : ''}`} /> Yenile
+          </Button>
           <Button 
             variant="outline" 
             onClick={handleBulkPDF}

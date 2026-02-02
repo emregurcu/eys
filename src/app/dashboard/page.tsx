@@ -13,6 +13,7 @@ import {
   Clock,
   DollarSign,
   Package,
+  RefreshCw,
 } from 'lucide-react';
 import Link from 'next/link';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -133,13 +134,22 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">
-          Hoş Geldin, {session?.user?.name?.split(' ')[0]}
-        </h1>
-        <p className="text-muted-foreground">
-          İşte mağazalarınızın güncel durumu
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">
+            Hoş Geldin, {session?.user?.name?.split(' ')[0]}
+          </h1>
+          <p className="text-muted-foreground">
+            İşte mağazalarınızın güncel durumu
+          </p>
+        </div>
+        <Button 
+          variant="outline" 
+          onClick={fetchDashboardData}
+          disabled={loading}
+        >
+          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Yenile
+        </Button>
       </div>
 
       {/* İstatistik Kartları */}

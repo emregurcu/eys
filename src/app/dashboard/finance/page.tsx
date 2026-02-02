@@ -19,6 +19,7 @@ import {
   Truck,
   CreditCard,
   ShoppingCart,
+  RefreshCw,
 } from 'lucide-react';
 import { formatCurrency, formatShortDate } from '@/lib/utils';
 
@@ -127,6 +128,13 @@ export default function FinancePage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={fetchData}
+            disabled={loading}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Yenile
+          </Button>
           <Select value={storeFilter} onValueChange={setStoreFilter}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Mağaza" />

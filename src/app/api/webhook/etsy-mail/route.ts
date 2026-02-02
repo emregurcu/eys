@@ -175,56 +175,78 @@ async function matchCountry(countryStr: string | undefined): Promise<string | nu
 
   if (countries.length === 0) return null;
 
-  // Direkt eşleşme
+  // Öncelikli tam eşleşme kuralları (sıra önemli!)
+  // Bu kurallar bölge eşleştirmeden ÖNCE kontrol edilir
+  const exactMatchRules: { pattern: string[]; countryNames: string[] }[] = [
+    // Amerika - EN ÖNCE kontrol et (united states vs united kingdom karışmasın)
+    { 
+      pattern: ['united states', 'usa', 'u.s.a', 'u.s.', 'amerika', 'abd', 'american'], 
+      countryNames: ['america', 'usa', 'amerika', 'abd', 'united states'] 
+    },
+    // Kanada
+    { 
+      pattern: ['canada', 'kanada', 'canadian'], 
+      countryNames: ['canada', 'kanada'] 
+    },
+    // Avustralya
+    { 
+      pattern: ['australia', 'avustralya', 'australian', 'aussie'], 
+      countryNames: ['australia', 'avustralya'] 
+    },
+    // İngiltere/UK - united kingdom ayrı kontrol
+    { 
+      pattern: ['united kingdom', 'great britain', 'england', 'uk', 'britain', 'ingiltere', 'birleşik krallık'], 
+      countryNames: ['europe', 'europa', 'avrupa', 'eu'] 
+    },
+  ];
+
+  // Öncelikli eşleşmeleri kontrol et
+  for (const rule of exactMatchRules) {
+    for (const pattern of rule.pattern) {
+      if (countryLower.includes(pattern) || pattern.includes(countryLower)) {
+        // Bu pattern ile eşleşti, şimdi uygun ülkeyi bul
+        for (const countryName of rule.countryNames) {
+          const found = countries.find(c => 
+            c.name.toLowerCase().includes(countryName) || 
+            c.code.toLowerCase() === countryName
+          );
+          if (found) return found.id;
+        }
+      }
+    }
+  }
+
+  // Direkt isim/kod eşleşmesi
   for (const country of countries) {
     const name = country.name.toLowerCase();
     const code = country.code.toLowerCase();
 
-    if (countryLower === name || countryLower === code || 
-        countryLower.includes(name) || name.includes(countryLower)) {
+    if (countryLower === name || countryLower === code) {
       return country.id;
     }
   }
 
-  // Bölge bazlı eşleştirme kuralları
-  const regionRules: { [key: string]: string[] } = {
-    // Avrupa ülkeleri
-    'europe': ['germany', 'france', 'italy', 'spain', 'netherlands', 'belgium', 'austria', 
-               'switzerland', 'sweden', 'norway', 'denmark', 'finland', 'poland', 'czech',
-               'portugal', 'ireland', 'greece', 'hungary', 'romania', 'uk', 'united kingdom',
-               'england', 'scotland', 'wales', 'great britain', 'almanya', 'fransa', 'italya',
-               'ispanya', 'hollanda', 'belçika', 'avusturya', 'isviçre', 'isveç', 'norveç',
-               'danimarka', 'finlandiya', 'polonya', 'çekya', 'portekiz', 'irlanda', 'yunanistan',
-               'macaristan', 'romanya', 'ingiltere', 'birleşik krallık', 'avrupa'],
-    'europa': ['germany', 'france', 'italy', 'spain', 'netherlands', 'belgium', 'austria',
-               'europe', 'eu', 'european'],
-    // Amerika
-    'america': ['usa', 'us', 'united states', 'amerika', 'abd', 'states', 'american'],
-    'usa': ['usa', 'us', 'united states', 'amerika', 'abd', 'states', 'american'],
-    // Kanada
-    'canada': ['canada', 'kanada', 'canadian'],
-    'kanada': ['canada', 'kanada', 'canadian'],
-    // Avustralya
-    'australia': ['australia', 'avustralya', 'aussie', 'australian', 'new zealand', 'oceania'],
-    'avustralya': ['australia', 'avustralya', 'aussie', 'australian', 'new zealand', 'oceania'],
-    // Türkiye (eğer eklenirse)
-    'turkey': ['turkey', 'türkiye', 'turkiye', 'turkish', 'tr'],
-    'türkiye': ['turkey', 'türkiye', 'turkiye', 'turkish', 'tr'],
-  };
+  // Bölge bazlı eşleştirme kuralları (Avrupa ülkeleri için)
+  const europeCountries = [
+    'germany', 'france', 'italy', 'spain', 'netherlands', 'belgium', 'austria', 
+    'switzerland', 'sweden', 'norway', 'denmark', 'finland', 'poland', 'czech',
+    'portugal', 'ireland', 'greece', 'hungary', 'romania', 'slovakia', 'slovenia',
+    'croatia', 'bulgaria', 'estonia', 'latvia', 'lithuania', 'luxembourg', 'malta',
+    'cyprus', 'iceland', 'almanya', 'fransa', 'italya', 'ispanya', 'hollanda', 
+    'belçika', 'avusturya', 'isviçre', 'isveç', 'norveç', 'danimarka', 'finlandiya', 
+    'polonya', 'çekya', 'portekiz', 'irlanda', 'yunanistan', 'macaristan', 'romanya',
+    'avrupa', 'europe', 'eu', 'european'
+  ];
 
-  // Bölge eşleştirme
-  for (const country of countries) {
-    const name = country.name.toLowerCase();
-    const code = country.code.toLowerCase();
-    
-    // Bu ülkenin kurallarını kontrol et
-    const rules = regionRules[name] || regionRules[code];
-    if (rules) {
-      for (const rule of rules) {
-        if (countryLower.includes(rule) || rule.includes(countryLower)) {
-          return country.id;
-        }
-      }
+  // Avrupa ülkesi mi kontrol et
+  for (const euroCountry of europeCountries) {
+    if (countryLower.includes(euroCountry)) {
+      const europeRecord = countries.find(c => 
+        c.name.toLowerCase().includes('europ') || 
+        c.name.toLowerCase().includes('avrupa') ||
+        c.code.toLowerCase() === 'eu'
+      );
+      if (europeRecord) return europeRecord.id;
     }
   }
 
