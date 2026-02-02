@@ -11,25 +11,68 @@ const WEBHOOK_SECRET = process.env.ETSY_MAIL_WEBHOOK_SECRET || 'etsy-webhook-sec
 async function matchCanvasSize(dimensionStr: string | undefined): Promise<string | null> {
   if (!dimensionStr) return null;
 
-  // Boyut string'inden sayıları çıkar (örn: "20x30 cm" -> 20, 30)
-  const numbers = dimensionStr.match(/(\d+)\s*[xX×]\s*(\d+)/);
-  if (!numbers) return null;
-
-  const width = parseInt(numbers[1]);
-  const height = parseInt(numbers[2]);
-
-  // Hem width x height hem de height x width olarak ara
-  const canvasSize = await prisma.canvasSize.findFirst({
-    where: {
-      isActive: true,
-      OR: [
-        { width, height },
-        { width: height, height: width }, // Ters de olabilir
-      ],
-    },
+  // Tüm aktif boyutları al
+  const canvasSizes = await prisma.canvasSize.findMany({
+    where: { isActive: true },
   });
 
-  return canvasSize?.id || null;
+  if (canvasSizes.length === 0) return null;
+
+  const dimLower = dimensionStr.toLowerCase().trim();
+
+  // Boyut string'inden sayıları çıkar (örn: "20x30 cm" -> 20, 30)
+  // Farklı formatlar: "20x30", "20 x 30", "20×30", "20*30", "20 by 30"
+  const numbers = dimLower.match(/(\d+(?:\.\d+)?)\s*[xX×\*]?\s*(?:by\s+)?(\d+(?:\.\d+)?)/);
+  
+  if (numbers) {
+    const num1 = Math.round(parseFloat(numbers[1]));
+    const num2 = Math.round(parseFloat(numbers[2]));
+
+    // İnç ise cm'ye çevir (yaklaşık)
+    let width = num1;
+    let height = num2;
+    
+    if (dimLower.includes('inch') || dimLower.includes('"') || dimLower.includes("''")) {
+      width = Math.round(num1 * 2.54);
+      height = Math.round(num2 * 2.54);
+    }
+
+    // Hem width x height hem de height x width olarak ara
+    for (const size of canvasSizes) {
+      if ((size.width === width && size.height === height) ||
+          (size.width === height && size.height === width)) {
+        return size.id;
+      }
+    }
+
+    // Yakın boyut ara (±2 cm tolerans)
+    for (const size of canvasSizes) {
+      const matchW1 = Math.abs(size.width - width) <= 2 && Math.abs(size.height - height) <= 2;
+      const matchW2 = Math.abs(size.width - height) <= 2 && Math.abs(size.height - width) <= 2;
+      if (matchW1 || matchW2) {
+        return size.id;
+      }
+    }
+  }
+
+  // İsim bazlı eşleştirme (örn: "30x40 cm" ismi direkt aranır)
+  for (const size of canvasSizes) {
+    const sizeName = size.name.toLowerCase();
+    if (dimLower.includes(sizeName) || sizeName.includes(dimLower)) {
+      return size.id;
+    }
+    // Sadece rakamları karşılaştır
+    const sizeNumbers = sizeName.match(/\d+/g);
+    const dimNumbers = dimLower.match(/\d+/g);
+    if (sizeNumbers && dimNumbers && sizeNumbers.length >= 2 && dimNumbers.length >= 2) {
+      if ((sizeNumbers[0] === dimNumbers[0] && sizeNumbers[1] === dimNumbers[1]) ||
+          (sizeNumbers[0] === dimNumbers[1] && sizeNumbers[1] === dimNumbers[0])) {
+        return size.id;
+      }
+    }
+  }
+
+  return null;
 }
 
 // Çerçeve eşleştirme fonksiyonu
@@ -43,43 +86,156 @@ async function matchFrameOption(frameStr: string | undefined): Promise<string | 
     where: { isActive: true },
   });
 
-  // Eşleştirme kuralları
+  if (frameOptions.length === 0) return null;
+
+  // Eşleştirme kuralları - genişletilmiş
   const matchRules: { [key: string]: string[] } = {
-    'none': ['no frame', 'unframed', 'frameless', 'çerçevesiz', 'without frame', 'canvas only', 'rolled', 'rolled canvas'],
-    'black': ['black', 'siyah', 'black frame', 'siyah çerçeve', 'black wood', 'black wooden'],
-    'white': ['white', 'beyaz', 'white frame', 'beyaz çerçeve', 'white wood', 'white wooden'],
-    'wood': ['wood', 'wooden', 'natural', 'ahşap', 'natural wood', 'doğal', 'oak', 'walnut'],
-    'gold': ['gold', 'golden', 'altın', 'gold frame'],
-    'silver': ['silver', 'gümüş', 'silver frame'],
-    'brown': ['brown', 'kahverengi', 'dark wood', 'espresso'],
+    // Çerçevesiz varyasyonları
+    'none': ['no frame', 'unframed', 'frameless', 'çerçevesiz', 'without frame', 'canvas only', 
+             'rolled', 'rolled canvas', 'print only', 'poster', 'unstretched', 'tube'],
+    // Siyah çerçeve
+    'black': ['black', 'siyah', 'black frame', 'siyah çerçeve', 'black wood', 'black wooden',
+              'noir', 'schwarz', 'nero', 'dark frame', 'ebony'],
+    // Beyaz çerçeve
+    'white': ['white', 'beyaz', 'white frame', 'beyaz çerçeve', 'white wood', 'white wooden',
+              'blanc', 'weiss', 'weiß', 'bianco', 'ivory', 'cream'],
+    // Ahşap/Natural çerçeve
+    'wood': ['wood', 'wooden', 'natural', 'ahşap', 'natural wood', 'doğal', 'oak', 'walnut',
+             'pine', 'timber', 'light wood', 'maple', 'birch', 'bamboo'],
+    // Altın çerçeve
+    'gold': ['gold', 'golden', 'altın', 'gold frame', 'brass', 'champagne'],
+    // Gümüş çerçeve
+    'silver': ['silver', 'gümüş', 'silver frame', 'chrome', 'metallic', 'steel'],
+    // Kahverengi çerçeve
+    'brown': ['brown', 'kahverengi', 'dark wood', 'espresso', 'chocolate', 'mocha', 'walnut'],
+    // Floating frame
+    'float': ['float', 'floating', 'floating frame', 'yüzen'],
   };
 
+  // Önce direkt isim/kod eşleşmesi dene
   for (const frame of frameOptions) {
     const code = frame.code.toLowerCase();
     const name = frame.name.toLowerCase();
 
-    // Direkt eşleşme
-    if (frameLower === code || frameLower === name || frameLower.includes(name) || name.includes(frameLower)) {
+    // Tam eşleşme
+    if (frameLower === code || frameLower === name) {
       return frame.id;
     }
 
-    // Kural bazlı eşleşme
+    // İçerme eşleşmesi
+    if (frameLower.includes(name) || name.includes(frameLower)) {
+      return frame.id;
+    }
+  }
+
+  // Kural bazlı eşleşme
+  for (const frame of frameOptions) {
+    const code = frame.code.toLowerCase();
     const rules = matchRules[code];
+    
     if (rules) {
       for (const rule of rules) {
-        if (frameLower.includes(rule) || rule.includes(frameLower)) {
+        if (frameLower.includes(rule)) {
           return frame.id;
         }
       }
     }
   }
 
-  // Eşleşme bulunamadıysa "none" veya "çerçevesiz" olanı dön
+  // Hiçbir şey bulunamadıysa, frame options'daki kelimeleri tek tek kontrol et
+  for (const frame of frameOptions) {
+    const nameWords = frame.name.toLowerCase().split(/\s+/);
+    for (const word of nameWords) {
+      if (word.length > 3 && frameLower.includes(word)) {
+        return frame.id;
+      }
+    }
+  }
+
+  // Eşleşme bulunamadıysa ilk "none/çerçevesiz" olanı veya ilk seçeneği dön
   const defaultFrame = frameOptions.find(f => 
-    f.code === 'none' || f.name.toLowerCase().includes('çerçevesiz')
+    f.code === 'none' || 
+    f.name.toLowerCase().includes('çerçevesiz') ||
+    f.name.toLowerCase().includes('canvas')
   );
 
-  return defaultFrame?.id || null;
+  return defaultFrame?.id || frameOptions[0]?.id || null;
+}
+
+// Ülke eşleştirme fonksiyonu - bölge bazlı
+async function matchCountry(countryStr: string | undefined): Promise<string | null> {
+  if (!countryStr) return null;
+
+  const countryLower = countryStr.toLowerCase().trim();
+
+  // Tüm ülkeleri al
+  const countries = await prisma.country.findMany({
+    where: { isActive: true },
+  });
+
+  if (countries.length === 0) return null;
+
+  // Direkt eşleşme
+  for (const country of countries) {
+    const name = country.name.toLowerCase();
+    const code = country.code.toLowerCase();
+
+    if (countryLower === name || countryLower === code || 
+        countryLower.includes(name) || name.includes(countryLower)) {
+      return country.id;
+    }
+  }
+
+  // Bölge bazlı eşleştirme kuralları
+  const regionRules: { [key: string]: string[] } = {
+    // Avrupa ülkeleri
+    'europe': ['germany', 'france', 'italy', 'spain', 'netherlands', 'belgium', 'austria', 
+               'switzerland', 'sweden', 'norway', 'denmark', 'finland', 'poland', 'czech',
+               'portugal', 'ireland', 'greece', 'hungary', 'romania', 'uk', 'united kingdom',
+               'england', 'scotland', 'wales', 'great britain', 'almanya', 'fransa', 'italya',
+               'ispanya', 'hollanda', 'belçika', 'avusturya', 'isviçre', 'isveç', 'norveç',
+               'danimarka', 'finlandiya', 'polonya', 'çekya', 'portekiz', 'irlanda', 'yunanistan',
+               'macaristan', 'romanya', 'ingiltere', 'birleşik krallık', 'avrupa'],
+    'europa': ['germany', 'france', 'italy', 'spain', 'netherlands', 'belgium', 'austria',
+               'europe', 'eu', 'european'],
+    // Amerika
+    'america': ['usa', 'us', 'united states', 'amerika', 'abd', 'states', 'american'],
+    'usa': ['usa', 'us', 'united states', 'amerika', 'abd', 'states', 'american'],
+    // Kanada
+    'canada': ['canada', 'kanada', 'canadian'],
+    'kanada': ['canada', 'kanada', 'canadian'],
+    // Avustralya
+    'australia': ['australia', 'avustralya', 'aussie', 'australian', 'new zealand', 'oceania'],
+    'avustralya': ['australia', 'avustralya', 'aussie', 'australian', 'new zealand', 'oceania'],
+    // Türkiye (eğer eklenirse)
+    'turkey': ['turkey', 'türkiye', 'turkiye', 'turkish', 'tr'],
+    'türkiye': ['turkey', 'türkiye', 'turkiye', 'turkish', 'tr'],
+  };
+
+  // Bölge eşleştirme
+  for (const country of countries) {
+    const name = country.name.toLowerCase();
+    const code = country.code.toLowerCase();
+    
+    // Bu ülkenin kurallarını kontrol et
+    const rules = regionRules[name] || regionRules[code];
+    if (rules) {
+      for (const rule of rules) {
+        if (countryLower.includes(rule) || rule.includes(countryLower)) {
+          return country.id;
+        }
+      }
+    }
+  }
+
+  // Varsayılan olarak Avrupa'yı dön (en yaygın)
+  const defaultCountry = countries.find(c => 
+    c.name.toLowerCase().includes('europ') || 
+    c.name.toLowerCase().includes('avrupa') ||
+    c.code.toLowerCase() === 'eu'
+  );
+
+  return defaultCountry?.id || countries[0]?.id || null;
 }
 
 interface EtsyMailData {
@@ -204,19 +360,8 @@ export async function POST(req: NextRequest) {
       matchedFrameOptionId,
     });
 
-    // Ülke eşleştirme (kargo için)
-    let countryId: string | null = null;
-    if (data.shippingCountry) {
-      const country = await prisma.country.findFirst({
-        where: {
-          OR: [
-            { name: { contains: data.shippingCountry, mode: 'insensitive' } },
-            { code: data.shippingCountry.toUpperCase() },
-          ],
-        },
-      });
-      countryId = country?.id || null;
-    }
+    // Ülke eşleştirme (kargo için) - akıllı bölge eşleştirme
+    const countryId = await matchCountry(data.shippingCountry);
 
     // Maliyet hesaplama
     let productCost = 0;
