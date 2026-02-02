@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
         netProfit: true,
         profitMargin: true,
         orderDate: true,
+        createdAt: true,
         countryId: true,
         imageUrl: true,
         trackingNumber: true,
@@ -69,7 +70,7 @@ export async function GET(req: NextRequest) {
         },
         _count: { select: { items: true } },
       },
-      orderBy: { orderDate: 'desc' },
+      orderBy: [{ orderDate: 'desc' }, { createdAt: 'desc' }],
       take: 100, // Son 100 sipariş
     });
 
@@ -215,7 +216,7 @@ export async function POST(req: NextRequest) {
         totalCost,
         netProfit,
         profitMargin,
-        orderDate: new Date(orderDate),
+        orderDate: orderDate ? new Date(orderDate) : new Date(),
         notes: notes || null,
         imageUrl: imageUrl || null,
         items: {

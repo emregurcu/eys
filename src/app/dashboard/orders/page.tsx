@@ -156,7 +156,7 @@ export default function OrdersPage() {
     shippingAddress: '',
     salePrice: '',
     saleCurrency: 'USD',
-    orderDate: new Date().toISOString().split('T')[0],
+    orderDate: new Date().toISOString(),
     notes: '',
     imageUrl: '',
     items: [{ canvasSizeId: '', frameOptionId: '', title: '', quantity: 1, salePrice: '' }],
@@ -167,7 +167,7 @@ export default function OrdersPage() {
   const [formDataLoading, setFormDataLoading] = useState(false);
   const [formPrefetched, setFormPrefetched] = useState(false);
   
-  // New order form
+  // New order form - ISO formatında tam tarih-saat
   const [orderForm, setOrderForm] = useState({
     storeId: '',
     orderNumber: '',
@@ -177,7 +177,7 @@ export default function OrdersPage() {
     shippingAddress: '',
     salePrice: '',
     saleCurrency: 'USD',
-    orderDate: new Date().toISOString().split('T')[0],
+    orderDate: new Date().toISOString(),
     notes: '',
     imageUrl: '',
     items: [{ canvasSizeId: '', frameOptionId: '', title: '', quantity: 1, salePrice: '' }],
@@ -206,7 +206,7 @@ export default function OrdersPage() {
         shippingAddress: editingOrder.shippingAddress || '',
         salePrice: editingOrder.salePrice?.toString() || '',
         saleCurrency: editingOrder.saleCurrency || 'USD',
-        orderDate: editingOrder.orderDate ? new Date(editingOrder.orderDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        orderDate: editingOrder.orderDate ? new Date(editingOrder.orderDate).toISOString() : new Date().toISOString(),
         notes: editingOrder.notes || '',
         imageUrl: editingOrder.imageUrl || '',
         items: editingOrder.items && editingOrder.items.length > 0
@@ -490,7 +490,7 @@ export default function OrdersPage() {
           shippingAddress: '',
           salePrice: '',
           saleCurrency: 'USD',
-          orderDate: new Date().toISOString().split('T')[0],
+          orderDate: new Date().toISOString(),
           notes: '',
           imageUrl: '',
           items: [{ canvasSizeId: '', frameOptionId: '', title: '', quantity: 1, salePrice: '' }],
@@ -1318,11 +1318,11 @@ export default function OrdersPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Sipariş Tarihi</label>
+                  <label className="text-sm font-medium">Sipariş Tarihi ve Saati</label>
                   <Input
-                    type="date"
-                    value={editOrderForm.orderDate}
-                    onChange={(e) => setEditOrderForm({ ...editOrderForm, orderDate: e.target.value })}
+                    type="datetime-local"
+                    value={editOrderForm.orderDate ? new Date(editOrderForm.orderDate).toISOString().slice(0, 16) : ''}
+                    onChange={(e) => setEditOrderForm({ ...editOrderForm, orderDate: e.target.value ? new Date(e.target.value).toISOString() : new Date().toISOString() })}
                   />
                 </div>
               </div>
@@ -1719,11 +1719,11 @@ export default function OrdersPage() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium">Sipariş Tarihi</label>
+                <label className="text-sm font-medium">Sipariş Tarihi ve Saati</label>
                 <Input
-                  type="date"
-                  value={orderForm.orderDate}
-                  onChange={(e) => setOrderForm({ ...orderForm, orderDate: e.target.value })}
+                  type="datetime-local"
+                  value={orderForm.orderDate ? new Date(orderForm.orderDate).toISOString().slice(0, 16) : ''}
+                  onChange={(e) => setOrderForm({ ...orderForm, orderDate: e.target.value ? new Date(e.target.value).toISOString() : new Date().toISOString() })}
                 />
               </div>
             </div>
