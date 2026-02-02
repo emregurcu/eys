@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { MobileNav } from '@/components/layout/mobile-nav';
+import { MobileSidebar } from '@/components/layout/mobile-sidebar';
 
 export default function DashboardLayout({
   children,
@@ -35,11 +36,12 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen overflow-hidden">
       <Sidebar />
-      <div className="flex flex-1 flex-col">
-        <Header onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 main-content">
+      <MobileSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex flex-1 flex-col min-w-0">
+        <Header onMenuClick={() => setSidebarOpen(true)} />
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 main-content">
           {children}
         </main>
         <MobileNav />

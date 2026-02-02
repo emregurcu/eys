@@ -74,3 +74,49 @@
     padding-bottom: 0;
   }
 }
+
+/* PWA mobil görünüm düzeltmeleri */
+html, body {
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+}
+
+/* Mobil için tablo kaydırma */
+@media (max-width: 768px) {
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Input zoom'u engelle */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* PWA standalone mod için */
+@media (display-mode: standalone) {
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  
+  /* Safe area için ekstra padding */
+  .main-content {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Mobil sidebar animasyonu */
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-in.slide-in-from-left {
+  animation: slideInLeft 0.3s ease-out;
+}

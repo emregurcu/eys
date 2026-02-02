@@ -137,6 +137,8 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [storeFilter, setStoreFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [sortBy, setSortBy] = useState('newest');
   
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -277,11 +279,23 @@ export default function OrdersPage() {
     
     // Tarih filtresi
     let matchDate = true;
-    if (dateFilter !== 'all') {
-      const orderDate = new Date(order.orderDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
+    const orderDate = new Date(order.orderDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Özel tarih aralığı
+    if (dateFilter === 'custom') {
+      if (dateFrom) {
+        const fromDate = new Date(dateFrom);
+        fromDate.setHours(0, 0, 0, 0);
+        if (orderDate < fromDate) matchDate = false;
+      }
+      if (dateTo) {
+        const toDate = new Date(dateTo);
+        toDate.setHours(23, 59, 59, 999);
+        if (orderDate > toDate) matchDate = false;
+      }
+    } else if (dateFilter !== 'all') {
       switch (dateFilter) {
         case 'today':
           const todayStart = new Date(today);
@@ -635,6 +649,40 @@ export default function OrdersPage() {
     setLoading(false);
   };
 
+  const bulkDeleteOrders = async () => {
+    if (selectedOrders.size === 0) {
+      toast.error('Lütfen en az bir sipariş seçin');
+      return;
+    }
+
+    if (!confirm(`${selectedOrders.size} siparişi silmek istediğinize emin misiniz? Bu işlem geri alınamaz!`)) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const promises = Array.from(selectedOrders).map(orderId =>
+        fetch(`/api/orders/${orderId}`, { method: 'DELETE' })
+      );
+
+      const results = await Promise.all(promises);
+      const successCount = results.filter(r => r.ok).length;
+
+      if (successCount === selectedOrders.size) {
+        toast.success(`${successCount} sipariş silindi`);
+        setSelectedOrders(new Set());
+        setShowBulkEdit(false);
+        fetchOrders();
+      } else {
+        toast.warning(`${successCount}/${selectedOrders.size} sipariş silindi`);
+        fetchOrders();
+      }
+    } catch (error) {
+      toast.error('Toplu silme başarısız');
+    }
+    setLoading(false);
+  };
+
   // Toplam kar/zarar hesapla
   const totalProfit = sortedOrders.reduce((sum, o) => sum + (o.netProfit || 0), 0);
   const totalRevenue = sortedOrders.reduce((sum, o) => sum + (o.salePrice || 0), 0);
@@ -755,7 +803,7 @@ export default function OrdersPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={dateFilter} onValueChange={setDateFilter}>
+            <Select value={dateFilter} onValueChange={(v) => { setDateFilter(v); if (v !== 'custom') { setDateFrom(''); setDateTo(''); } }}>
               <SelectTrigger className="w-full sm:w-[150px]">
                 <SelectValue placeholder="Tarih" />
               </SelectTrigger>
@@ -766,8 +814,27 @@ export default function OrdersPage() {
                 <SelectItem value="month">Bu Ay</SelectItem>
                 <SelectItem value="lastmonth">Geçen Ay</SelectItem>
                 <SelectItem value="year">Bu Yıl</SelectItem>
+                <SelectItem value="custom">Tarih Aralığı</SelectItem>
               </SelectContent>
             </Select>
+            {dateFilter === 'custom' && (
+              <>
+                <Input
+                  type="date"
+                  placeholder="Başlangıç"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-full sm:w-[140px]"
+                />
+                <Input
+                  type="date"
+                  placeholder="Bitiş"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full sm:w-[140px]"
+                />
+              </>
+            )}
             <Select value={sortBy} onValueChange={setSortBy}>
               <SelectTrigger className="w-full sm:w-[160px]">
                 <SelectValue placeholder="Sırala" />
@@ -868,6 +935,9 @@ export default function OrdersPage() {
                     </td>
                     <td className="p-4 hidden sm:table-cell">
                       <p className="text-sm">{formatShortDate(order.orderDate)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(order.orderDate).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
                     </td>
                     <td className="p-4 hidden md:table-cell">
                       <div className="max-w-[200px]">
@@ -1511,7 +1581,18 @@ export default function OrdersPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex gap-2 pt-4">
+            <div className="border-t pt-4 mt-4">
+              <Button 
+                variant="destructive" 
+                className="w-full" 
+                onClick={bulkDeleteOrders}
+                disabled={loading}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {loading ? 'Siliniyor...' : `Seçili ${selectedOrders.size} Siparişi Sil`}
+              </Button>
+            </div>
+            <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1" onClick={() => setShowBulkEdit(false)}>
                 İptal
               </Button>
