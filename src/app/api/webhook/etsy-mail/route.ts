@@ -286,6 +286,17 @@ interface EtsyMailData {
     price: number;
     dimensions?: string;
     frameOption?: string;
+    transactionId?: string;
+    transactionUrl?: string;
+    imageUrl?: string;
+    imageUrlLarge?: string;
+  }>;
+  productImages?: Array<{
+    transactionId?: string;
+    transactionUrl?: string;
+    imageUrlSmall?: string;
+    imageUrl?: string;
+    imageUrlLarge?: string;
   }>;
   totalPrice: number;
   itemPrice?: number;
