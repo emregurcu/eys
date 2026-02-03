@@ -89,10 +89,17 @@ async function matchFrameOption(frameStr: string | undefined): Promise<string | 
   if (frameOptions.length === 0) return null;
 
   // Eşleştirme kuralları - genişletilmiş
+  // ÖNEMLİ: Daha spesifik kurallar önce kontrol edilmeli
   const matchRules: { [key: string]: string[] } = {
-    // Çerçevesiz varyasyonları
+    // Çerçevesiz varyasyonları - ROLL dahil
     'none': ['no frame', 'unframed', 'frameless', 'çerçevesiz', 'without frame', 'canvas only', 
-             'rolled', 'rolled canvas', 'print only', 'poster', 'unstretched', 'tube'],
+             'rolled', 'rolled canvas', 'print only', 'poster', 'unstretched', 'tube', 'roll'],
+    // Antik Altın çerçeve - ÖNCE kontrol edilmeli (gold'dan önce)
+    'antiqgold': ['antique gold', 'antik gold', 'antik altın', 'antique gold frame', 'vintage gold'],
+    // Antik Gümüş çerçeve - ÖNCE kontrol edilmeli (silver'dan önce)
+    'antiqsilver': ['antique silver', 'antik silver', 'antik gümüş', 'antique silver frame', 'vintage silver'],
+    // Eskitme çerçeve - aged pattern
+    'aged': ['aged', 'aged patterned', 'eskitme', 'vintage frame', 'distressed', 'rustic'],
     // Siyah çerçeve
     'black': ['black', 'siyah', 'black frame', 'siyah çerçeve', 'black wood', 'black wooden',
               'noir', 'schwarz', 'nero', 'dark frame', 'ebony'],
@@ -100,19 +107,38 @@ async function matchFrameOption(frameStr: string | undefined): Promise<string | 
     'white': ['white', 'beyaz', 'white frame', 'beyaz çerçeve', 'white wood', 'white wooden',
               'blanc', 'weiss', 'weiß', 'bianco', 'ivory', 'cream'],
     // Ahşap/Natural çerçeve
-    'wood': ['wood', 'wooden', 'natural', 'ahşap', 'natural wood', 'doğal', 'oak', 'walnut',
+    'wood': ['wood', 'wooden', 'natural', 'ahşap', 'natural wood', 'doğal', 'oak',
              'pine', 'timber', 'light wood', 'maple', 'birch', 'bamboo'],
-    // Altın çerçeve
-    'gold': ['gold', 'golden', 'altın', 'gold frame', 'brass', 'champagne'],
-    // Gümüş çerçeve
-    'silver': ['silver', 'gümüş', 'silver frame', 'chrome', 'metallic', 'steel'],
+    // Altın çerçeve (sadece "gold" - antique gold hariç)
+    'gold': ['gold framed', 'gold frame', 'golden frame', 'altın çerçeve', 'brass frame', 'champagne frame'],
+    // Gümüş çerçeve (sadece "silver" - antique silver hariç)
+    'silver': ['silver framed', 'silver frame', 'gümüş çerçeve', 'chrome frame', 'metallic frame', 'steel frame'],
     // Kahverengi çerçeve
     'brown': ['brown', 'kahverengi', 'dark wood', 'espresso', 'chocolate', 'mocha', 'walnut'],
     // Floating frame
     'float': ['float', 'floating', 'floating frame', 'yüzen'],
   };
 
-  // Önce direkt isim/kod eşleşmesi dene
+  // Öncelikli kurallar - spesifik olanlar önce kontrol edilmeli
+  const priorityOrder = ['none', 'antiqgold', 'antiqsilver', 'aged', 'black', 'white', 'wood', 'gold', 'silver', 'brown', 'float'];
+
+  // Önce kural bazlı eşleşme (öncelik sırasına göre)
+  for (const priorityCode of priorityOrder) {
+    const rules = matchRules[priorityCode];
+    if (!rules) continue;
+
+    for (const rule of rules) {
+      if (frameLower.includes(rule)) {
+        // Bu kuralla eşleşen frame option'ı bul
+        const matchedFrame = frameOptions.find(f => f.code.toLowerCase() === priorityCode);
+        if (matchedFrame) {
+          return matchedFrame.id;
+        }
+      }
+    }
+  }
+
+  // Direkt isim/kod eşleşmesi dene
   for (const frame of frameOptions) {
     const code = frame.code.toLowerCase();
     const name = frame.name.toLowerCase();
@@ -125,20 +151,6 @@ async function matchFrameOption(frameStr: string | undefined): Promise<string | 
     // İçerme eşleşmesi
     if (frameLower.includes(name) || name.includes(frameLower)) {
       return frame.id;
-    }
-  }
-
-  // Kural bazlı eşleşme
-  for (const frame of frameOptions) {
-    const code = frame.code.toLowerCase();
-    const rules = matchRules[code];
-    
-    if (rules) {
-      for (const rule of rules) {
-        if (frameLower.includes(rule)) {
-          return frame.id;
-        }
-      }
     }
   }
 

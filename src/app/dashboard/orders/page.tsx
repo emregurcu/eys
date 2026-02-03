@@ -44,6 +44,7 @@ import {
   Upload,
   X,
   RefreshCw,
+  Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -1067,7 +1068,18 @@ export default function OrdersPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Sipariş No</p>
-                  <p className="font-medium">{selectedOrder.orderNumber}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium">{selectedOrder.orderNumber}</p>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedOrder.orderNumber);
+                        toast.success('Sipariş no kopyalandı');
+                      }}
+                      className="p-1 hover:bg-muted rounded"
+                    >
+                      <Copy className="h-3 w-3 text-muted-foreground" />
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Durum</p>
@@ -1085,7 +1097,18 @@ export default function OrdersPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Müşteri</p>
-                  <p className="font-medium">{selectedOrder.customerName}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium">{selectedOrder.customerName}</p>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedOrder.customerName);
+                        toast.success('Müşteri adı kopyalandı');
+                      }}
+                      className="p-1 hover:bg-muted rounded"
+                    >
+                      <Copy className="h-3 w-3 text-muted-foreground" />
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Ülke</p>
@@ -1126,7 +1149,18 @@ export default function OrdersPage() {
               {/* Teslimat Adresi */}
               {selectedOrder.shippingAddress && (
                 <div className="border rounded-lg p-4 space-y-2">
-                  <h4 className="font-medium">Teslimat Adresi</h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium">Teslimat Adresi</h4>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedOrder.shippingAddress || '');
+                        toast.success('Adres kopyalandı');
+                      }}
+                      className="p-1.5 hover:bg-muted rounded flex items-center gap-1 text-xs text-muted-foreground"
+                    >
+                      <Copy className="h-3 w-3" /> Kopyala
+                    </button>
+                  </div>
                   <p className="text-sm whitespace-pre-wrap">{selectedOrder.shippingAddress}</p>
                 </div>
               )}
@@ -1136,7 +1170,19 @@ export default function OrdersPage() {
                 <h4 className="font-medium">Kargo Takip</h4>
                 {selectedOrder.trackingNumber ? (
                   <div className="text-sm space-y-1">
-                    <p><span className="text-muted-foreground">Takip Kodu:</span> <span className="font-medium">{selectedOrder.trackingNumber}</span></p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Takip Kodu:</span>
+                      <span className="font-medium">{selectedOrder.trackingNumber}</span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedOrder.trackingNumber || '');
+                          toast.success('Takip kodu kopyalandı');
+                        }}
+                        className="p-1 hover:bg-muted rounded"
+                      >
+                        <Copy className="h-3 w-3 text-muted-foreground" />
+                      </button>
+                    </div>
                     {selectedOrder.trackingCompany && (
                       <p><span className="text-muted-foreground">Kargo Firması:</span> {selectedOrder.trackingCompany}</p>
                     )}
