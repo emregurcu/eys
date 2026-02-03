@@ -591,9 +591,10 @@ function extractProductImagesFromHtml(htmlBody) {
  */
 function cleanTrackingParams(url) {
   try {
-    const urlObj = new URL(url);
-    // Sadece temel URL'i döndür (campaign, utm vs parametreleri kaldır)
-    return urlObj.origin + urlObj.pathname;
+    // Google Apps Script'te URL API yok, regex ile temizle
+    // https://www.etsy.com/transaction/4952067573?campaign=... -> https://www.etsy.com/transaction/4952067573
+    const cleanUrl = url.split('?')[0];
+    return cleanUrl;
   } catch (e) {
     return url;
   }
@@ -894,6 +895,41 @@ function debugLastEmail() {
       Logger.log(`  - Transaction URL: ${item.transactionUrl}`);
       Logger.log(`  - Image URL: ${item.imageUrl}`);
     }
+  }
+}
+
+
+/**
+ * Son emaili parse et ve WEBHOOK'A GÖNDER
+ * Test için kullanın - Panelde sipariş görünecek
+ */
+function sendLastEmailToWebhook() {
+  const searchQuery = 'from:transaction@etsy.com subject:"You made a sale"';
+  const threads = GmailApp.search(searchQuery, 0, 1);
+  
+  if (threads.length === 0) {
+    Logger.log('No emails found');
+    return;
+  }
+  
+  const message = threads[0].getMessages()[0];
+  const orderData = parseEtsyEmail(message);
+  
+  if (!orderData) {
+    Logger.log('Could not parse email');
+    return;
+  }
+  
+  Logger.log('=== SENDING TO WEBHOOK ===');
+  Logger.log('Order Number: ' + orderData.orderNumber);
+  
+  const result = sendToWebhook(orderData);
+  
+  if (result.success) {
+    Logger.log('✅ SUCCESS! Order sent to panel');
+    Logger.log('Response: ' + JSON.stringify(result.response));
+  } else {
+    Logger.log('❌ FAILED: ' + result.error);
   }
 }
 

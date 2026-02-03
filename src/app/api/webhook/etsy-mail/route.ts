@@ -489,7 +489,8 @@ export async function POST(req: NextRequest) {
         profitMargin: profitMargin,
         orderDate: data.orderDate ? new Date(data.orderDate) : new Date(),
         notes: noteParts.join('\n'),
-        imageUrl: data.etsyOrderUrl || null,
+        // Görsel URL'sini al: önce items[0].imageUrl, yoksa productImages[0].imageUrl, yoksa etsyOrderUrl
+        imageUrl: (data.items?.[0]?.imageUrl) || (data.productImages?.[0]?.imageUrl) || data.etsyOrderUrl || null,
         items: data.items && data.items.length > 0 ? {
           create: await Promise.all(data.items.map(async (item) => {
             // Her item için ayrı eşleştirme
