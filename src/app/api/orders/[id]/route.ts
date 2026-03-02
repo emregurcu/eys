@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { notifyOrderStatusChange, notifyTrackingAdded } from '@/lib/notifications';
 import { calculateOrderCosts } from '@/lib/order-costs';
+import { logActivity } from '@/lib/activity-logger';
 
 // GET - Tek sipariş getir
 export async function GET(
@@ -188,18 +189,42 @@ export async function PUT(
       },
     });
 
-    // Durum değiştiyse mağaza ve yöneticisine bildirim (değişikliği yapan hariç)
+    // Activity logging
     if (status && existingOrder && existingOrder.status !== status) {
+      await logActivity({
+        userId: session.user.id,
+        action: 'status_change',
+        entity: 'order',
+        entityId: params.id,
+        data: { from: existingOrder.status, to: status, orderNumber: order.orderNumber },
+      });
       await notifyOrderStatusChange(order, status, session.user.id);
     }
 
-    // Takip ilk kez eklendiyse mağaza yöneticilerine mail
     const trackingJustAdded =
       (trackingNumber !== undefined || trackingCompany !== undefined) &&
       (trackingNumber?.trim() || trackingCompany?.trim()) &&
       !existingOrder?.trackingNumber?.trim();
     if (trackingJustAdded && order.trackingNumber?.trim()) {
+      await logActivity({
+        userId: session.user.id,
+        action: 'tracking_added',
+        entity: 'order',
+        entityId: params.id,
+        data: { trackingNumber: order.trackingNumber, trackingCompany: order.trackingCompany, orderNumber: order.orderNumber },
+      });
       await notifyTrackingAdded(order, order.trackingNumber.trim(), order.trackingCompany);
+    }
+
+    // General update activity (if not status change or tracking)
+    if (!status && !trackingJustAdded) {
+      await logActivity({
+        userId: session.user.id,
+        action: 'update',
+        entity: 'order',
+        entityId: params.id,
+        data: { orderNumber: order.orderNumber },
+      });
     }
 
     return NextResponse.json(order);
@@ -220,8 +245,21 @@ export async function DELETE(
       return NextResponse.json({ error: 'Yetkisiz erişim' }, { status: 403 });
     }
 
+    const orderToDelete = await prisma.order.findUnique({
+      where: { id: params.id },
+      select: { orderNumber: true },
+    });
+
     await prisma.order.delete({
       where: { id: params.id },
+    });
+
+    await logActivity({
+      userId: session.user.id,
+      action: 'delete',
+      entity: 'order',
+      entityId: params.id,
+      data: { orderNumber: orderToDelete?.orderNumber },
     });
 
     return NextResponse.json({ success: true });

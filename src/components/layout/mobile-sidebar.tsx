@@ -14,15 +14,20 @@ import {
   Settings,
   Bell,
   DollarSign,
+  UserCircle,
+  BarChart3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const menuItems = [
   { href: '/dashboard', label: 'Panel', icon: LayoutDashboard },
   { href: '/dashboard/orders', label: 'Siparişler', icon: ShoppingCart },
+  { href: '/dashboard/products', label: 'Ürünler', icon: Package },
+  { href: '/dashboard/customers', label: 'Müşteriler', icon: UserCircle },
   { href: '/dashboard/pricing', label: 'Fiyatlandırma', icon: DollarSign },
   { href: '/dashboard/issues', label: 'Sorunlar', icon: AlertTriangle },
   { href: '/dashboard/finance', label: 'Finans', icon: Wallet },
+  { href: '/dashboard/reports', label: 'Raporlar', icon: BarChart3 },
   { href: '/dashboard/stores', label: 'Mağazalar', icon: Store },
   { href: '/dashboard/users', label: 'Kullanıcılar', icon: Users },
   { href: '/dashboard/notifications', label: 'Bildirimler', icon: Bell },

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
+import { useTheme } from 'next-themes';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +27,7 @@ import {
 
 export default function SettingsPage() {
   const { data: session } = useSession();
+  const { theme, setTheme } = useTheme();
   const isAdmin = session?.user?.role === 'ADMIN';
 
   const [notifications, setNotifications] = useState({
@@ -366,7 +368,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <label className="text-sm font-medium">Tema</label>
-            <Select defaultValue="light">
+            <Select value={theme || 'light'} onValueChange={setTheme}>
               <SelectTrigger className="w-full sm:w-[200px]">
                 <SelectValue />
               </SelectTrigger>

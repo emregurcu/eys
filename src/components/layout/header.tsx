@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import Link from 'next/link';
 import { NotificationBell } from '@/components/notifications/notification-bell';
+import { GlobalSearch } from '@/components/global-search';
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -31,7 +32,9 @@ export function Header({ onMenuClick }: HeaderProps) {
         <Menu className="h-5 w-5" />
       </Button>
 
-      <div className="flex-1" />
+      <div className="flex-1 max-w-md">
+        <GlobalSearch />
+      </div>
 
       <div className="flex items-center gap-2">
         <NotificationBell />
