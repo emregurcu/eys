@@ -1,10 +1,24 @@
 import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import prisma from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+
+async function getUserStoreIds(userId: string, role: string): Promise<string[] | null> {
+  if (role === 'ADMIN') return null; // null = tüm mağazalar
+  const managed = await prisma.storeManager.findMany({
+    where: { userId },
+    select: { storeId: true },
+  });
+  return managed.map((s) => s.storeId);
+}
+
+function buildStoreWhere(storeIds: string[] | null): Record<string, any> {
+  if (!storeIds) return {};
+  return { storeId: { in: storeIds } };
+}
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -12,7 +26,8 @@ export async function GET(req: NextRequest) {
     return new Response('Unauthorized', { status: 401 });
   }
 
-  const userId = session.user.id;
+  const storeIds = await getUserStoreIds(session.user.id, session.user.role || 'USER');
+  const storeWhere = buildStoreWhere(storeIds);
 
   const encoder = new TextEncoder();
   let closed = false;
@@ -28,11 +43,9 @@ export async function GET(req: NextRequest) {
         }
       };
 
-      // İlk bağlantıda mevcut durumu gönder
-      const initialData = await getQuickStats(userId);
+      const initialData = await getQuickStats(storeWhere);
       send('init', initialData);
 
-      // Her 10 saniyede bir değişiklik kontrolü
       let lastOrderCount = initialData.totalOrders;
       let lastPendingCount = initialData.pendingOrders;
 
@@ -42,16 +55,12 @@ export async function GET(req: NextRequest) {
           return;
         }
         try {
-          const current = await getQuickStats(userId);
+          const current = await getQuickStats(storeWhere);
 
-          // Yeni sipariş geldi mi?
           if (current.totalOrders > lastOrderCount) {
             const diff = current.totalOrders - lastOrderCount;
-            // Son eklenen siparişleri getir
             const newOrders = await prisma.order.findMany({
-              where: {
-                store: { is: { userId } },
-              },
+              where: storeWhere,
               select: {
                 id: true,
                 orderNumber: true,
@@ -66,7 +75,6 @@ export async function GET(req: NextRequest) {
             send('new_orders', { count: diff, orders: newOrders });
           }
 
-          // Durum değişikliği
           if (current.pendingOrders !== lastPendingCount) {
             send('status_change', {
               pendingOrders: current.pendingOrders,
@@ -74,17 +82,15 @@ export async function GET(req: NextRequest) {
             });
           }
 
-          // Genel güncelleme (her zaman gönder)
           send('update', current);
 
           lastOrderCount = current.totalOrders;
           lastPendingCount = current.pendingOrders;
-        } catch (error) {
+        } catch {
           // Hata olursa devam et
         }
-      }, 10000); // 10 saniye
+      }, 10000);
 
-      // Heartbeat - bağlantıyı canlı tut
       const heartbeat = setInterval(() => {
         if (closed) {
           clearInterval(heartbeat);
@@ -99,7 +105,6 @@ export async function GET(req: NextRequest) {
         }
       }, 30000);
 
-      // Cleanup on abort
       req.signal.addEventListener('abort', () => {
         closed = true;
         clearInterval(interval);
@@ -121,20 +126,18 @@ export async function GET(req: NextRequest) {
   });
 }
 
-async function getQuickStats(userId: string) {
+async function getQuickStats(storeWhere: Record<string, any>) {
   const [totalOrders, pendingOrders, openIssues] = await Promise.all([
-    prisma.order.count({
-      where: { store: { is: { userId } } },
-    }),
+    prisma.order.count({ where: storeWhere }),
     prisma.order.count({
       where: {
-        store: { is: { userId } },
+        ...storeWhere,
         status: { in: ['NEW', 'PROCESSING', 'PRODUCTION', 'READY'] },
       },
     }),
     prisma.issue.count({
       where: {
-        store: { is: { userId } },
+        ...storeWhere,
         status: { in: ['OPEN', 'IN_PROGRESS'] },
       },
     }),
