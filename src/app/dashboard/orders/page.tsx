@@ -136,6 +136,8 @@ export default function OrdersPage() {
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; order: Order } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const longPressTouchRef = useRef<{ x: number; y: number } | null>(null);
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
@@ -228,6 +230,35 @@ export default function OrdersPage() {
   const handleContextMenu = useCallback((e: React.MouseEvent, order: Order) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY, order });
+  }, []);
+
+  // Long-press (touch) support for context menu on mobile
+  const handleTouchStart = useCallback((e: React.TouchEvent, order: Order) => {
+    const touch = e.touches[0];
+    longPressTouchRef.current = { x: touch.clientX, y: touch.clientY };
+    longPressTimerRef.current = setTimeout(() => {
+      if (longPressTouchRef.current) {
+        // Haptic feedback if available
+        if (navigator.vibrate) navigator.vibrate(50);
+        setContextMenu({ x: longPressTouchRef.current.x, y: longPressTouchRef.current.y, order });
+      }
+    }, 500);
+  }, []);
+
+  const handleTouchMove = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    longPressTouchRef.current = null;
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    longPressTouchRef.current = null;
   }, []);
 
   const contextStatusFlow: { key: string; label: string; color: string; icon: string }[] = [
@@ -901,8 +932,115 @@ export default function OrdersPage() {
         </CardContent>
       </Card>
 
-      {/* Sipariş Listesi */}
-      <Card>
+      {/* Sipariş Listesi - Mobil Kart Görünümü */}
+      <div className="sm:hidden space-y-2">
+        {pageLoading ? (
+          [...Array(3)].map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-4">
+                <div className="space-y-2 animate-pulse">
+                  <div className="h-4 bg-muted rounded w-32" />
+                  <div className="h-3 bg-muted rounded w-24" />
+                  <div className="h-3 bg-muted rounded w-20" />
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        ) : sortedOrders.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center text-muted-foreground">
+              Sipariş bulunamadı
+            </CardContent>
+          </Card>
+        ) : (
+          sortedOrders.map((order) => (
+            <Card
+              key={order.id}
+              className={`transition-all ${
+                selectedOrders.has(order.id) ? 'ring-2 ring-primary' : ''
+              } ${order.id === highlightedId ? 'ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' : ''}`}
+              onTouchStart={(e) => handleTouchStart(e, order)}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              <CardContent className="p-3">
+                <div className="flex items-start gap-3">
+                  {/* Görsel */}
+                  {order.imageUrl && (
+                    <img
+                      src={order.imageUrl}
+                      className="w-14 h-14 rounded-md object-cover shrink-0"
+                      alt={order.orderNumber}
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-medium text-sm truncate">{order.orderNumber}</p>
+                      <Badge className={`text-[10px] shrink-0 ${orderStatusColors[order.status]}`}>
+                        {orderStatusLabels[order.status]}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">{order.customerName}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-muted-foreground">{order.store?.name}</span>
+                      <span className="text-xs text-muted-foreground">•</span>
+                      <span className="text-xs text-muted-foreground">{formatShortDate(order.orderDate)}</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium">{formatCurrency(order.salePrice, order.saleCurrency || 'USD')}</span>
+                        <span className={`text-xs font-medium ${(order.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatCurrency(order.netProfit || 0, 'USD')}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Checkbox
+                          checked={selectedOrders.has(order.id)}
+                          onCheckedChange={() => toggleOrderSelection(order.id)}
+                          className="h-4 w-4"
+                        />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                              <MoreVertical className="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setSelectedOrder(order)}>
+                              <Eye className="mr-2 h-4 w-4" /> Detay
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setEditingOrder(order)}>
+                              <Edit className="mr-2 h-4 w-4" /> Düzenle
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleSinglePDF(order)}>
+                              <FileDown className="mr-2 h-4 w-4" /> PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              setOrderForShipping(order);
+                              setShippingForm({
+                                trackingNumber: order.trackingNumber || '',
+                                trackingCompany: order.trackingCompany || '',
+                              });
+                            }}>
+                              <Truck className="mr-2 h-4 w-4" /> Kargo
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onClick={() => deleteOrder(order.id)}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Sil
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Sipariş Listesi - Desktop Tablo */}
+      <Card className="hidden sm:block">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -951,7 +1089,10 @@ export default function OrdersPage() {
                     key={order.id}
                     ref={order.id === highlightedId ? highlightRef : undefined}
                     onContextMenu={(e) => handleContextMenu(e, order)}
-                    className={`border-b hover:bg-muted/30 transition-all duration-700 ${
+                    onTouchStart={(e) => handleTouchStart(e, order)}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                    className={`border-b hover:bg-muted/30 transition-all duration-700 select-none ${
                       selectedOrders.has(order.id) ? 'bg-muted/50' : ''
                     } ${order.id === highlightedId ? 'bg-yellow-100 dark:bg-yellow-900/30 ring-2 ring-yellow-400 ring-inset' : ''}`}
                   >

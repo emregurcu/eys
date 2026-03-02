@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,8 @@ import {
   Store,
   Truck,
   List,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatCurrency, formatShortDate } from '@/lib/utils';
@@ -55,6 +57,12 @@ export default function KanbanPage() {
   const [loading, setLoading] = useState(true);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  // Mobile: active column index for swipe navigation
+  const [mobileColumnIndex, setMobileColumnIndex] = useState(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  // Mobile: touch drag for moving cards between columns
+  const [touchDragOrder, setTouchDragOrder] = useState<KanbanOrder | null>(null);
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -95,7 +103,7 @@ export default function KanbanPage() {
     }
   };
 
-  // Drag & Drop Handlers
+  // Drag & Drop Handlers (Desktop)
   const handleDragStart = (e: React.DragEvent, orderId: string) => {
     e.dataTransfer.setData('orderId', orderId);
     setDraggingId(orderId);
@@ -127,6 +135,35 @@ export default function KanbanPage() {
     }
   };
 
+  // Mobile: swipe navigation between columns
+  const handleMobileTouchStart = (e: React.TouchEvent) => {
+    touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+
+  const handleMobileTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+    // Only swipe if horizontal movement is dominant
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+      if (dx < 0 && mobileColumnIndex < KANBAN_COLUMNS.length - 1) {
+        setMobileColumnIndex(mobileColumnIndex + 1);
+      } else if (dx > 0 && mobileColumnIndex > 0) {
+        setMobileColumnIndex(mobileColumnIndex - 1);
+      }
+    }
+    touchStartRef.current = null;
+  };
+
+  // Mobile: move order to adjacent column
+  const moveOrderMobile = (order: KanbanOrder, direction: 'left' | 'right') => {
+    const currentIdx = KANBAN_COLUMNS.findIndex((c) => c.status === order.status);
+    const targetIdx = direction === 'left' ? currentIdx - 1 : currentIdx + 1;
+    if (targetIdx >= 0 && targetIdx < KANBAN_COLUMNS.length) {
+      updateOrderStatus(order.id, KANBAN_COLUMNS[targetIdx].status);
+    }
+  };
+
   const filteredOrders = orders.filter((o) => {
     if (storeFilter !== 'all' && o.store.id !== storeFilter) return false;
     return true;
@@ -143,6 +180,9 @@ export default function KanbanPage() {
     );
   }
 
+  const currentMobileColumn = KANBAN_COLUMNS[mobileColumnIndex];
+  const mobileColumnOrders = getColumnOrders(currentMobileColumn.status);
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -154,15 +194,16 @@ export default function KanbanPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold">Sipariş Pipeline</h1>
-            <p className="text-muted-foreground text-sm">
-              Sürükle-bırak ile sipariş durumlarını yönetin
+            <h1 className="text-xl sm:text-2xl font-bold">Sipariş Pipeline</h1>
+            <p className="text-muted-foreground text-xs sm:text-sm">
+              <span className="hidden sm:inline">Sürükle-bırak ile sipariş durumlarını yönetin</span>
+              <span className="sm:hidden">Kaydırarak kolon değiştirin, butonlarla sipariş taşıyın</span>
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Select value={storeFilter} onValueChange={setStoreFilter}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[160px] sm:w-[180px]">
               <SelectValue placeholder="Mağaza" />
             </SelectTrigger>
             <SelectContent>
@@ -183,8 +224,136 @@ export default function KanbanPage() {
         </div>
       </div>
 
-      {/* Kanban Board */}
-      <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: '70vh' }}>
+      {/* Mobile Kanban - Single Column with Swipe */}
+      <div
+        className="sm:hidden"
+        onTouchStart={handleMobileTouchStart}
+        onTouchEnd={handleMobileTouchEnd}
+      >
+        {/* Column indicator dots */}
+        <div className="flex items-center justify-center gap-1.5 mb-3">
+          {KANBAN_COLUMNS.map((col, i) => {
+            const count = getColumnOrders(col.status).length;
+            return (
+              <button
+                key={col.status}
+                onClick={() => setMobileColumnIndex(i)}
+                className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium transition-all ${
+                  i === mobileColumnIndex
+                    ? `${col.color} text-white`
+                    : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {i === mobileColumnIndex ? col.label : ''}
+                <span className={i === mobileColumnIndex ? 'bg-white/30 px-1 rounded' : ''}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Navigation arrows + Column Header */}
+        <div className="flex items-center justify-between mb-3 px-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            disabled={mobileColumnIndex === 0}
+            onClick={() => setMobileColumnIndex(mobileColumnIndex - 1)}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+          <div className="flex items-center gap-2">
+            <div className={`w-3 h-3 rounded-full ${currentMobileColumn.color}`} />
+            <h3 className="font-semibold">{currentMobileColumn.label}</h3>
+            <Badge variant="secondary" className="text-xs">{mobileColumnOrders.length}</Badge>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            disabled={mobileColumnIndex === KANBAN_COLUMNS.length - 1}
+            onClick={() => setMobileColumnIndex(mobileColumnIndex + 1)}
+          >
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        </div>
+
+        {/* Mobile Cards */}
+        <div className={`space-y-2 rounded-xl border-2 p-2 min-h-[50vh] ${currentMobileColumn.bg}`}>
+          {mobileColumnOrders.map((order) => {
+            const currentStatusIdx = KANBAN_COLUMNS.findIndex((c) => c.status === order.status);
+            const canMoveLeft = currentStatusIdx > 0;
+            const canMoveRight = currentStatusIdx < KANBAN_COLUMNS.length - 1;
+
+            return (
+              <div
+                key={order.id}
+                className="bg-white dark:bg-card rounded-lg border p-3 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-1">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm">{order.orderNumber}</p>
+                    <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+                      <User className="h-3 w-3" /> {order.customerName}
+                    </p>
+                  </div>
+                  <span className="text-sm font-bold shrink-0">
+                    {formatCurrency(order.salePrice, 'USD')}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 mt-2">
+                  <Badge variant="outline" className="text-[10px] px-1.5">
+                    <Store className="h-2.5 w-2.5 mr-0.5" /> {order.store.name}
+                  </Badge>
+                  <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                    <Calendar className="h-2.5 w-2.5" /> {formatShortDate(order.orderDate)}
+                  </span>
+                  {order.trackingNumber && <Truck className="h-3 w-3 text-green-500" />}
+                </div>
+
+                {/* Mobile move buttons */}
+                <div className="flex items-center justify-between mt-2 pt-2 border-t">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    disabled={!canMoveLeft}
+                    onClick={() => moveOrderMobile(order, 'left')}
+                  >
+                    <ChevronLeft className="h-3 w-3" />
+                    {canMoveLeft ? KANBAN_COLUMNS[currentStatusIdx - 1].label : ''}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    disabled={!canMoveRight}
+                    onClick={() => moveOrderMobile(order, 'right')}
+                  >
+                    {canMoveRight ? KANBAN_COLUMNS[currentStatusIdx + 1].label : ''}
+                    <ChevronRight className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+
+          {mobileColumnOrders.length === 0 && (
+            <div className="flex items-center justify-center h-32 text-xs text-muted-foreground">
+              Bu kolonda sipariş yok
+            </div>
+          )}
+        </div>
+
+        {/* Swipe hint */}
+        <p className="text-center text-[10px] text-muted-foreground mt-2">
+          ← Sola/sağa kaydırarak kolon değiştirin →
+        </p>
+      </div>
+
+      {/* Desktop Kanban Board */}
+      <div className="hidden sm:flex gap-4 overflow-x-auto pb-4" style={{ minHeight: '70vh' }}>
         {KANBAN_COLUMNS.map((col) => {
           const columnOrders = getColumnOrders(col.status);
           const isOver = dragOverColumn === col.status;
@@ -218,7 +387,7 @@ export default function KanbanPage() {
                     draggable
                     onDragStart={(e) => handleDragStart(e, order.id)}
                     onDragEnd={handleDragEnd}
-                    className={`bg-white rounded-lg border p-3 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-all ${
+                    className={`bg-white dark:bg-card rounded-lg border p-3 cursor-grab active:cursor-grabbing shadow-sm hover:shadow-md transition-all ${
                       draggingId === order.id ? 'opacity-50 scale-95' : ''
                     }`}
                   >

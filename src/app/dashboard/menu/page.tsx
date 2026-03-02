@@ -12,14 +12,24 @@ import {
   Bell,
   LogOut,
   ChevronRight,
+  UserCircle,
+  DollarSign,
+  BarChart3,
+  Columns,
+  Upload,
 } from 'lucide-react';
 
 const menuItems = [
-  { href: '/dashboard/products', label: 'Ürünler', icon: Package },
-  { href: '/dashboard/stores', label: 'Mağazalar', icon: Store },
-  { href: '/dashboard/users', label: 'Kullanıcılar', icon: Users },
-  { href: '/dashboard/notifications', label: 'Bildirimler', icon: Bell },
-  { href: '/dashboard/settings', label: 'Ayarlar', icon: Settings },
+  { href: '/dashboard/products', label: 'Ürünler', icon: Package, desc: 'Ürün kataloğu' },
+  { href: '/dashboard/customers', label: 'Müşteriler', icon: UserCircle, desc: 'Müşteri CRM' },
+  { href: '/dashboard/pricing', label: 'Fiyatlandırma', icon: DollarSign, desc: 'Maliyet ayarları' },
+  { href: '/dashboard/reports', label: 'Raporlar', icon: BarChart3, desc: 'Detaylı analizler' },
+  { href: '/dashboard/orders/kanban', label: 'Kanban Board', icon: Columns, desc: 'Sipariş pipeline' },
+  { href: '/dashboard/orders/import', label: 'Toplu İçe Aktar', icon: Upload, desc: 'CSV/Excel yükleme' },
+  { href: '/dashboard/stores', label: 'Mağazalar', icon: Store, desc: 'Mağaza yönetimi' },
+  { href: '/dashboard/users', label: 'Kullanıcılar', icon: Users, desc: 'Ekip yönetimi' },
+  { href: '/dashboard/notifications', label: 'Bildirimler', icon: Bell, desc: 'Bildirim merkezi' },
+  { href: '/dashboard/settings', label: 'Ayarlar', icon: Settings, desc: 'Sistem ayarları' },
 ];
 
 export default function MobileMenuPage() {
@@ -53,7 +63,7 @@ export default function MobileMenuPage() {
           {menuItems.map((item, i) => (
             <Link key={item.href} href={item.href}>
               <div
-                className={`flex items-center justify-between p-4 hover:bg-muted/50 ${
+                className={`flex items-center justify-between p-4 hover:bg-muted/50 active:bg-muted transition-colors ${
                   i !== menuItems.length - 1 ? 'border-b' : ''
                 }`}
               >
@@ -61,7 +71,10 @@ export default function MobileMenuPage() {
                   <div className="p-2 rounded-full bg-muted">
                     <item.icon className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <span className="font-medium">{item.label}</span>
+                  <div>
+                    <span className="font-medium text-sm">{item.label}</span>
+                    {item.desc && <p className="text-xs text-muted-foreground">{item.desc}</p>}
+                  </div>
                 </div>
                 <ChevronRight className="h-5 w-5 text-muted-foreground" />
               </div>

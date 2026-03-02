@@ -419,12 +419,12 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">
+          <h1 className="text-xl sm:text-2xl font-bold">
             Hoş Geldin, {session?.user?.name?.split(' ')[0]} 👋
           </h1>
-          <p className="text-muted-foreground">İşte mağazalarınızın güncel durumu</p>
+          <p className="text-sm text-muted-foreground">İşte mağazalarınızın güncel durumu</p>
         </div>
         <div className="flex items-center gap-2">
           {sseConnected ? (
@@ -443,7 +443,7 @@ export default function DashboardPage() {
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Yenile
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> <span className="hidden sm:inline">Yenile</span>
           </Button>
         </div>
       </div>

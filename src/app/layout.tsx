@@ -17,8 +17,8 @@ export const metadata: Metadata = {
     title: 'DMT Sipariş',
   },
   icons: {
-    icon: '/favicon.svg',
-    apple: '/icons/icon-192x192.svg',
+    icon: '/icons/icon-192x192.png',
+    apple: '/icons/apple-touch-icon.png',
   },
 };
 
@@ -39,7 +39,7 @@ export default function RootLayout({
   return (
     <html lang="tr" suppressHydrationWarning>
       <head>
-        <link rel="apple-touch-icon" href="/icons/icon-192x192.svg" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
       </head>
       <body className={inter.className}>
         <ThemeProvider
@@ -50,7 +50,15 @@ export default function RootLayout({
         >
           <Providers>
             {children}
-            <Toaster position="top-right" richColors />
+            <Toaster 
+              position="top-center"
+              richColors 
+              expand={false}
+              offset={16}
+              toastOptions={{
+                className: 'text-sm',
+              }}
+            />
           </Providers>
         </ThemeProvider>
       </body>

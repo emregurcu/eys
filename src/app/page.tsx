@@ -15,6 +15,7 @@ import {
   ArrowRight,
   Lock,
 } from 'lucide-react';
+import { LandingMobileNav } from '@/components/landing-mobile-nav';
 
 export const metadata = {
   title: 'DMT Supply - Etsy Multi-Store Order Management',
@@ -130,7 +131,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white">
       {/* Navigation */}
-      <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b">
+      <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2">
@@ -145,13 +146,16 @@ export default function LandingPage() {
               <a href="#etsy-integration" className="hover:text-gray-900 transition-colors">Etsy Integration</a>
               <a href="#data-usage" className="hover:text-gray-900 transition-colors">Data &amp; Privacy</a>
             </div>
-            <Link
-              href="/login"
-              className="inline-flex items-center gap-2 bg-[#F1641E] text-white px-5 py-2.5 rounded-lg font-medium text-sm hover:bg-[#d9561a] transition-colors"
-            >
-              Sign In
-              <ArrowRight className="w-4 h-4" />
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/login"
+                className="hidden md:inline-flex items-center gap-2 bg-[#F1641E] text-white px-5 py-2.5 rounded-lg font-medium text-sm hover:bg-[#d9561a] transition-colors"
+              >
+                Sign In
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+              <LandingMobileNav />
+            </div>
           </div>
         </div>
       </nav>
