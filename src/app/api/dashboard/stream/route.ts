@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
             // Son eklenen siparişleri getir
             const newOrders = await prisma.order.findMany({
               where: {
-                store: { userId },
+                store: { is: { userId } },
               },
               select: {
                 id: true,
@@ -124,17 +124,17 @@ export async function GET(req: NextRequest) {
 async function getQuickStats(userId: string) {
   const [totalOrders, pendingOrders, openIssues] = await Promise.all([
     prisma.order.count({
-      where: { store: { userId } },
+      where: { store: { is: { userId } } },
     }),
     prisma.order.count({
       where: {
-        store: { userId },
+        store: { is: { userId } },
         status: { in: ['NEW', 'PROCESSING', 'PRODUCTION', 'READY'] },
       },
     }),
     prisma.issue.count({
       where: {
-        store: { userId },
+        store: { is: { userId } },
         status: { in: ['OPEN', 'IN_PROGRESS'] },
       },
     }),
