@@ -38,7 +38,7 @@ import {
   Calculator,
   FileDown,
   Image,
-  Link,
+  Link as LinkIcon,
   CheckSquare,
   Square,
   Upload,
@@ -349,65 +349,52 @@ export default function OrdersPage() {
     }
   });
 
-  // Maliyet hesaplama - anlık önizleme
-  const calculatedCosts = useMemo(() => {
-    if (!orderForm.storeId || !orderForm.salePrice) {
-      return null;
-    }
-
-    const store = stores.find(s => s.id === orderForm.storeId);
+  // Ortak maliyet hesaplama fonksiyonu
+  const computeCosts = (form: { storeId: string; salePrice: string; countryId: string; items: { canvasSizeId: string; frameOptionId: string; quantity: number }[] }) => {
+    if (!form.storeId || !form.salePrice) return null;
+    const store = stores.find(s => s.id === form.storeId);
     if (!store) return null;
 
     let productCost = 0;
     let shippingCost = 0;
 
-    for (const item of orderForm.items) {
+    for (const item of form.items) {
       if (item.canvasSizeId && item.frameOptionId) {
-        // Varyasyon maliyeti
         const variant = variants.find(
           v => v.canvasSizeId === item.canvasSizeId && v.frameOptionId === item.frameOptionId
         );
-        if (variant) {
-          productCost += variant.totalCost * item.quantity;
-        }
+        if (variant) productCost += variant.totalCost * item.quantity;
 
-        // Kargo maliyeti
-        if (orderForm.countryId) {
+        if (form.countryId) {
           const rate = shippingRates.find(
-            r => r.canvasSizeId === item.canvasSizeId && r.countryId === orderForm.countryId
+            r => r.canvasSizeId === item.canvasSizeId && r.countryId === form.countryId
           );
-          if (rate) {
-            shippingCost += rate.shippingCost * item.quantity;
-          }
+          if (rate) shippingCost += rate.shippingCost * item.quantity;
         }
       } else if (item.canvasSizeId) {
-        // Sadece boyut (çerçevesiz)
         const size = canvasSizes.find(s => s.id === item.canvasSizeId);
-        if (size) {
-          productCost += size.baseCost * item.quantity;
-        }
+        if (size) productCost += size.baseCost * item.quantity;
       }
     }
 
-    const salePrice = parseFloat(orderForm.salePrice) || 0;
+    const salePrice = parseFloat(form.salePrice) || 0;
     const etsyTransactionFee = (salePrice * store.etsyTransactionFee) / 100;
     const etsyPaymentFee = (salePrice * store.etsyPaymentFee) / 100;
-    const etsyListingFee = store.etsyListingFee * orderForm.items.length;
+    const etsyListingFee = store.etsyListingFee * form.items.length;
     const etsyFees = etsyTransactionFee + etsyPaymentFee + etsyListingFee;
 
     const totalCost = productCost + shippingCost + etsyFees;
     const netProfit = salePrice - totalCost;
     const profitMargin = salePrice > 0 ? (netProfit / salePrice) * 100 : 0;
 
-    return {
-      productCost,
-      shippingCost,
-      etsyFees,
-      totalCost,
-      netProfit,
-      profitMargin,
-    };
-  }, [orderForm, stores, variants, shippingRates, canvasSizes]);
+    return { productCost, shippingCost, etsyFees, totalCost, netProfit, profitMargin };
+  };
+
+  // Maliyet hesaplama - yeni sipariş önizleme
+  const calculatedCosts = useMemo(() => computeCosts(orderForm), [orderForm, stores, variants, shippingRates, canvasSizes]);
+
+  // Maliyet hesaplama - düzenleme önizleme
+  const editCalculatedCosts = useMemo(() => computeCosts(editOrderForm), [editOrderForm, stores, variants, shippingRates, canvasSizes]);
 
   const addItem = () => {
     setOrderForm({
@@ -1427,7 +1414,7 @@ export default function OrdersPage() {
 
                 {/* URL veya Yüklenen Görsel */}
                 <div className="flex items-center gap-2">
-                  <Link className="h-4 w-4 text-muted-foreground" />
+                  <LinkIcon className="h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Veya görsel URL'si yapıştırın (Etsy, Google Drive, vb.)"
                     value={editOrderForm.imageUrl?.startsWith('data:') ? '' : editOrderForm.imageUrl}
@@ -1566,6 +1553,40 @@ export default function OrdersPage() {
                   ))}
                 </div>
               </div>
+
+              {/* Maliyet Önizleme - Düzenleme */}
+              {editCalculatedCosts && (
+                <div className="border rounded-lg p-4 bg-muted/30">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Calculator className="h-4 w-4" />
+                    <h4 className="font-medium">Maliyet Önizleme</h4>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Ürün Maliyeti:</span>
+                      <span>${editCalculatedCosts.productCost.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Kargo Maliyeti:</span>
+                      <span>${editCalculatedCosts.shippingCost.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Etsy Kesintileri:</span>
+                      <span>${editCalculatedCosts.etsyFees.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Toplam Maliyet:</span>
+                      <span className="font-medium">${editCalculatedCosts.totalCost.toFixed(2)}</span>
+                    </div>
+                    <div className="col-span-2 border-t pt-2 flex justify-between font-medium">
+                      <span>Tahmini Net Kar:</span>
+                      <span className={editCalculatedCosts.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        ${editCalculatedCosts.netProfit.toFixed(2)} (%{editCalculatedCosts.profitMargin.toFixed(1)})
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-2 pt-4">
                 <Button variant="outline" className="flex-1" onClick={() => setEditingOrder(null)}>
@@ -1828,7 +1849,7 @@ export default function OrdersPage() {
 
               {/* URL veya Yüklenen Görsel */}
               <div className="flex items-center gap-2">
-                <Link className="h-4 w-4 text-muted-foreground" />
+                <LinkIcon className="h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Veya görsel URL'si yapıştırın (Etsy, Google Drive, vb.)"
                   value={orderForm.imageUrl?.startsWith('data:') ? '' : orderForm.imageUrl}

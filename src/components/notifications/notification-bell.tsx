@@ -96,7 +96,8 @@ export function NotificationBell() {
     fetchNotifications(true);
     const interval = setInterval(() => fetchNotifications(true), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.role]);
 
   const markAsRead = async (id: string) => {
     try {

@@ -4,8 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { notifyNewOrder } from '@/lib/notifications';
 
-// Webhook secret key for security
-const WEBHOOK_SECRET = process.env.ETSY_MAIL_WEBHOOK_SECRET || 'etsy-webhook-secret-key';
+// Webhook secret key for security - env zorunlu
+const WEBHOOK_SECRET = process.env.ETSY_MAIL_WEBHOOK_SECRET;
 
 // Boyut eşleştirme fonksiyonu
 async function matchCanvasSize(dimensionStr: string | undefined): Promise<string | null> {
@@ -320,6 +320,10 @@ export async function POST(req: NextRequest) {
     const data: EtsyMailData = await req.json();
 
     // Security check
+    if (!WEBHOOK_SECRET) {
+      console.error('Webhook: ETSY_MAIL_WEBHOOK_SECRET env değişkeni tanımlı değil');
+      return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
+    }
     if (data.secret !== WEBHOOK_SECRET) {
       console.log('Webhook: Invalid secret');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

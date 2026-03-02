@@ -57,6 +57,7 @@ export async function PUT(
       shippedDate,
       deliveredDate,
       // Yeni alanlar
+      storeId,
       customerName,
       customerEmail,
       shippingAddress,
@@ -94,6 +95,7 @@ export async function PUT(
     }
 
     const updateData: any = {};
+    if (storeId !== undefined) updateData.storeId = storeId;
     if (status !== undefined) updateData.status = status;
     if (trackingNumber !== undefined) updateData.trackingNumber = trackingNumber;
     if (trackingCompany !== undefined) updateData.trackingCompany = trackingCompany;

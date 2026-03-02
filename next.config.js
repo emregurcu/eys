@@ -20,7 +20,12 @@ const withPWA = require('next-pwa')({
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    domains: ['i.etsystatic.com'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'i.etsystatic.com',
+      },
+    ],
   },
 };
 

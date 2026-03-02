@@ -71,28 +71,49 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchDashboardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchDashboardData = async () => {
     try {
-      const ordersRes = await fetch('/api/orders?limit=5');
+      const [ordersRes, financeRes, issuesRes] = await Promise.all([
+        fetch('/api/orders'),
+        fetch('/api/finance/summary?period=month'),
+        fetch('/api/issues?status=OPEN'),
+      ]);
+
       if (ordersRes.ok) {
         const orders = await ordersRes.json();
         setRecentOrders(orders.slice(0, 5));
 
-        // İstatistikleri hesapla
-        const now = new Date();
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        
-        const monthlyOrders = orders.filter((o: any) => new Date(o.orderDate) >= monthStart);
         const pendingStatuses = ['NEW', 'PROCESSING', 'PRODUCTION', 'READY'];
-        
+        const pendingCount = orders.filter((o: any) => pendingStatuses.includes(o.status)).length;
+
+        // Finans verisi API'den
+        let monthlyRevenue = 0;
+        let monthlyProfit = 0;
+        let totalOrders = orders.length;
+
+        if (financeRes.ok) {
+          const finance = await financeRes.json();
+          monthlyRevenue = finance.summary?.totalRevenue || 0;
+          monthlyProfit = finance.summary?.totalProfit || 0;
+          totalOrders = Math.max(totalOrders, finance.summary?.orderCount || 0);
+        }
+
+        // Açık sorunlar
+        let openIssues = 0;
+        if (issuesRes.ok) {
+          const issues = await issuesRes.json();
+          openIssues = Array.isArray(issues) ? issues.length : 0;
+        }
+
         setStats({
-          totalOrders: orders.length,
-          pendingOrders: orders.filter((o: any) => pendingStatuses.includes(o.status)).length,
-          openIssues: 0, // TODO: issues API'den al
-          monthlyRevenue: monthlyOrders.reduce((sum: number, o: any) => sum + (o.salePrice || 0), 0),
-          monthlyProfit: monthlyOrders.reduce((sum: number, o: any) => sum + (o.netProfit || 0), 0),
+          totalOrders,
+          pendingOrders: pendingCount,
+          openIssues,
+          monthlyRevenue,
+          monthlyProfit,
         });
       }
     } catch (error) {

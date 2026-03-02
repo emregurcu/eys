@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { notifyNewOrder } from '@/lib/notifications';
+import { calculateOrderCosts } from '@/lib/order-costs';
 
 // GET - Tüm siparişleri getir
 export async function GET(req: NextRequest) {
@@ -120,16 +121,26 @@ export async function POST(req: NextRequest) {
       ? await prisma.country.findUnique({ where: { id: countryId } })
       : null;
 
-    // Ürün maliyetlerini ve kargo maliyetlerini hesapla
-    const processedItems = [];
-    let totalProductCost = 0;
-    let totalShippingCost = 0;
+    const parsedSalePrice = parseFloat(salePrice);
 
+    // Maliyet hesapla (merkezi fonksiyon)
+    const costs = await calculateOrderCosts({
+      storeId,
+      salePrice: parsedSalePrice,
+      items: items.map((item: any) => ({
+        canvasSizeId: item.canvasSizeId || null,
+        frameOptionId: item.frameOptionId || null,
+        quantity: item.quantity,
+      })),
+      countryId: countryId || null,
+    });
+
+    // Item'ları hazırla
+    const processedItems = [];
     for (const item of items) {
       let itemProductCost = 0;
 
       if (item.canvasSizeId && item.frameOptionId) {
-        // Varyasyon fiyatını bul
         const variant = await prisma.canvasSizeVariant.findUnique({
           where: {
             canvasSizeId_frameOptionId: {
@@ -138,40 +149,15 @@ export async function POST(req: NextRequest) {
             },
           },
         });
-
-        if (variant) {
-          itemProductCost = variant.totalCost;
-        }
-
-        // Boyut bazlı kargo maliyetini bul
-        if (countryId) {
-          const shippingRate = await prisma.sizeShippingRate.findUnique({
-            where: {
-              canvasSizeId_countryId: {
-                canvasSizeId: item.canvasSizeId,
-                countryId: countryId,
-              },
-            },
-          });
-
-          if (shippingRate) {
-            // Her ürün için kargo ekle (adet bazlı)
-            totalShippingCost += shippingRate.shippingCost * item.quantity;
-          }
-        }
+        if (variant) itemProductCost = variant.totalCost;
       } else if (item.canvasSizeId) {
-        // Sadece boyut seçili, çerçevesiz
         const canvasSize = await prisma.canvasSize.findUnique({
           where: { id: item.canvasSizeId },
         });
-        if (canvasSize) {
-          itemProductCost = canvasSize.baseCost;
-        }
+        if (canvasSize) itemProductCost = canvasSize.baseCost;
       }
 
       const itemTotalCost = itemProductCost * item.quantity;
-      totalProductCost += itemTotalCost;
-
       processedItems.push({
         canvasSizeId: item.canvasSizeId || null,
         frameOptionId: item.frameOptionId || null,
@@ -179,24 +165,13 @@ export async function POST(req: NextRequest) {
         quantity: item.quantity,
         salePrice: item.salePrice || 0,
         canvasCost: itemProductCost,
-        frameCost: 0, // Artık ayrı tutmuyoruz, variant içinde
+        frameCost: 0,
         totalCost: itemTotalCost,
         customWidth: item.customWidth || null,
         customHeight: item.customHeight || null,
         notes: item.notes || null,
       });
     }
-
-    // Etsy kesintileri
-    const parsedSalePrice = parseFloat(salePrice);
-    const etsyTransactionFee = (parsedSalePrice * store.etsyTransactionFee) / 100;
-    const etsyPaymentFee = (parsedSalePrice * store.etsyPaymentFee) / 100;
-    const etsyListingFee = store.etsyListingFee * items.length;
-    const etsyFees = etsyTransactionFee + etsyPaymentFee + etsyListingFee;
-
-    const totalCost = totalProductCost + totalShippingCost + etsyFees;
-    const netProfit = parsedSalePrice - totalCost;
-    const profitMargin = parsedSalePrice > 0 ? (netProfit / parsedSalePrice) * 100 : 0;
 
     // Siparişi oluştur
     const order = await prisma.order.create({
@@ -210,12 +185,12 @@ export async function POST(req: NextRequest) {
         shippingAddress: shippingAddress || null,
         salePrice: parsedSalePrice,
         saleCurrency: saleCurrency || 'USD',
-        productCost: totalProductCost,
-        shippingCost: totalShippingCost,
-        etsyFees,
-        totalCost,
-        netProfit,
-        profitMargin,
+        productCost: costs.productCost,
+        shippingCost: costs.shippingCost,
+        etsyFees: costs.etsyFees,
+        totalCost: costs.totalCost,
+        netProfit: costs.netProfit,
+        profitMargin: costs.profitMargin,
         orderDate: orderDate ? new Date(orderDate) : new Date(),
         notes: notes || null,
         imageUrl: imageUrl || null,
