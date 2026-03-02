@@ -87,7 +87,7 @@ export async function GET() {
         select: { salePrice: true, netProfit: true, totalCost: true },
       }),
 
-      // Son 5 sipariş
+      // Son 10 sipariş
       prisma.order.findMany({
         where: storeWhere,
         select: {
@@ -101,7 +101,7 @@ export async function GET() {
           store: { select: { name: true } },
         },
         orderBy: [{ orderDate: 'desc' }, { createdAt: 'desc' }],
-        take: 5,
+        take: 10,
       }),
 
       // Açık sorunlar (son 5)

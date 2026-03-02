@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -230,14 +231,17 @@ const SparklineTooltip = ({ active, payload }: any) => {
 };
 
 // ─── Main Component ────────────────────────────────────
+const AUTO_REFRESH_INTERVAL = 60_000; // 60 saniye
+
 export default function DashboardPage() {
   const { data: session } = useSession();
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchDashboard();
-  }, []);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [countdown, setCountdown] = useState(AUTO_REFRESH_INTERVAL / 1000);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchDashboard = async () => {
     setLoading(true);
@@ -250,7 +254,28 @@ export default function DashboardPage() {
       console.error('Dashboard data fetch error:', error);
     }
     setLoading(false);
+    setCountdown(AUTO_REFRESH_INTERVAL / 1000);
   };
+
+  useEffect(() => {
+    fetchDashboard();
+  }, []);
+
+  // Auto-refresh
+  useEffect(() => {
+    if (autoRefresh) {
+      intervalRef.current = setInterval(() => {
+        fetchDashboard();
+      }, AUTO_REFRESH_INTERVAL);
+      countdownRef.current = setInterval(() => {
+        setCountdown((prev) => (prev <= 1 ? AUTO_REFRESH_INTERVAL / 1000 : prev - 1));
+      }, 1000);
+    }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [autoRefresh]);
 
   if (loading || !data) {
     return (
@@ -279,9 +304,19 @@ export default function DashboardPage() {
           </h1>
           <p className="text-muted-foreground">İşte mağazalarınızın güncel durumu</p>
         </div>
-        <Button variant="outline" onClick={fetchDashboard} disabled={loading}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Yenile
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={autoRefresh ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            className="text-xs"
+          >
+            {autoRefresh ? `⏱ ${countdown}s` : '⏸ Durduruldu'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Yenile
+          </Button>
+        </div>
       </div>
 
       {/* ─── Bugünün Özeti ─── */}
@@ -409,7 +444,8 @@ export default function DashboardPage() {
                 {recentOrders.map((order) => (
                   <div
                     key={order.id}
-                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-colors"
+                    onClick={() => router.push(`/dashboard/orders?highlight=${order.id}`)}
+                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-colors cursor-pointer"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div>
@@ -427,6 +463,7 @@ export default function DashboardPage() {
                         {formatCurrency(order.netProfit || 0, 'USD')}
                       </p>
                     </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                   </div>
                 ))}
               </div>
