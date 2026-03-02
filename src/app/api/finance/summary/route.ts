@@ -76,13 +76,36 @@ export async function GET(req: NextRequest) {
       where.storeId = { in: userStores.map((s) => s.storeId) };
     }
 
-    // Siparişleri getir
-    const orders = await prisma.order.findMany({
-      where,
-      include: {
-        store: { select: { id: true, name: true } },
-      },
-    });
+    // Önceki dönem tarih aralığını hesapla (comparison için)
+    const currentDuration = (endDate || now).getTime() - startDate.getTime();
+    const prevEndDate = new Date(startDate.getTime() - 1); // mevcut dönem başlangıcından 1ms önce
+    prevEndDate.setHours(23, 59, 59, 999);
+    const prevStartDate = new Date(prevEndDate.getTime() - currentDuration);
+
+    const prevWhere: any = {
+      orderDate: { gte: prevStartDate, lte: prevEndDate },
+    };
+    if (orderStatus && orderStatus !== 'all') prevWhere.status = orderStatus;
+    if (where.storeId) prevWhere.storeId = where.storeId;
+
+    // Mevcut ve önceki dönem siparişlerini paralel getir
+    const [orders, prevOrders] = await Promise.all([
+      prisma.order.findMany({
+        where,
+        include: { store: { select: { id: true, name: true } } },
+      }),
+      period !== 'all' && !(!customStartDate && period === 'all')
+        ? prisma.order.findMany({
+            where: prevWhere,
+            select: {
+              salePrice: true,
+              totalCost: true,
+              netProfit: true,
+              orderDate: true,
+            },
+          })
+        : Promise.resolve([]),
+    ]);
 
     // Toplam hesaplamalar
     const totalRevenue = orders.reduce((sum, o) => sum + o.salePrice, 0);
@@ -91,6 +114,28 @@ export async function GET(req: NextRequest) {
     const totalEtsyFees = orders.reduce((sum, o) => sum + o.etsyFees, 0);
     const totalCost = orders.reduce((sum, o) => sum + o.totalCost, 0);
     const totalProfit = orders.reduce((sum, o) => sum + o.netProfit, 0);
+
+    // Önceki dönem hesaplamaları
+    const prevRevenue = prevOrders.reduce((sum, o) => sum + o.salePrice, 0);
+    const prevCost = prevOrders.reduce((sum, o) => sum + o.totalCost, 0);
+    const prevProfit = prevOrders.reduce((sum, o) => sum + o.netProfit, 0);
+    const prevOrderCount = prevOrders.length;
+
+    const calcChange = (current: number, previous: number) => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return ((current - previous) / Math.abs(previous)) * 100;
+    };
+
+    const comparison = {
+      revenueChange: calcChange(totalRevenue, prevRevenue),
+      costChange: calcChange(totalCost, prevCost),
+      profitChange: calcChange(totalProfit, prevProfit),
+      orderCountChange: calcChange(orders.length, prevOrderCount),
+      prevRevenue,
+      prevCost,
+      prevProfit,
+      prevOrderCount,
+    };
 
     // Mağaza bazlı özet
     const storeStats: Record<string, any> = {};
@@ -134,6 +179,7 @@ export async function GET(req: NextRequest) {
         profitMargin: totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0,
         orderCount: orders.length,
       },
+      comparison,
       storeStats: Object.values(storeStats),
       dailyData: Object.values(dailyData).sort((a, b) => a.date.localeCompare(b.date)),
       orders: orders.map((o) => ({
