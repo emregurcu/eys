@@ -7,6 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   ShoppingCart,
   AlertTriangle,
   TrendingUp,
@@ -26,8 +32,11 @@ import {
   Eye,
   ChevronRight,
   Sun,
+  Copy,
+  ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { formatCurrency, formatShortDate } from '@/lib/utils';
 import {
   AreaChart,
@@ -240,21 +249,54 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [countdown, setCountdown] = useState(AUTO_REFRESH_INTERVAL / 1000);
+  const [previewOrder, setPreviewOrder] = useState<any>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+
+  const prevOrderCountRef = useRef<number | null>(null);
+
+  const playNewOrderSound = () => {
+    try {
+      const audio = new Audio('/sound/money.mp3');
+      audio.volume = 0.5;
+      audio.play().catch(() => {});
+    } catch {}
+  };
 
   const fetchDashboard = async () => {
     setLoading(true);
     try {
       const res = await fetch('/api/dashboard');
       if (res.ok) {
-        setData(await res.json());
+        const newData: DashboardData = await res.json();
+        // Yeni sipariş geldi mi kontrol et
+        if (prevOrderCountRef.current !== null && newData.stats.totalOrders > prevOrderCountRef.current) {
+          const diff = newData.stats.totalOrders - prevOrderCountRef.current;
+          playNewOrderSound();
+          toast.success(`🎉 ${diff} yeni sipariş geldi!`, { duration: 5000 });
+        }
+        prevOrderCountRef.current = newData.stats.totalOrders;
+        setData(newData);
       }
     } catch (error) {
       console.error('Dashboard data fetch error:', error);
     }
     setLoading(false);
     setCountdown(AUTO_REFRESH_INTERVAL / 1000);
+  };
+
+  const fetchOrderDetail = async (orderId: string) => {
+    setPreviewLoading(true);
+    try {
+      const res = await fetch(`/api/orders/${orderId}`);
+      if (res.ok) {
+        setPreviewOrder(await res.json());
+      }
+    } catch (error) {
+      console.error('Order detail fetch error:', error);
+    }
+    setPreviewLoading(false);
   };
 
   useEffect(() => {
@@ -444,8 +486,8 @@ export default function DashboardPage() {
                 {recentOrders.map((order) => (
                   <div
                     key={order.id}
-                    onClick={() => router.push(`/dashboard/orders?highlight=${order.id}`)}
-                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-colors cursor-pointer"
+                    onClick={() => fetchOrderDetail(order.id)}
+                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-colors cursor-pointer group"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div>
@@ -463,7 +505,7 @@ export default function DashboardPage() {
                         {formatCurrency(order.netProfit || 0, 'USD')}
                       </p>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <Eye className="h-4 w-4 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 ))}
               </div>
@@ -767,6 +809,188 @@ export default function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      {/* ─── Sipariş Hızlı Önizleme Modal ─── */}
+      <Dialog open={!!previewOrder} onOpenChange={() => setPreviewOrder(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              Sipariş Önizleme
+              {previewOrder && (
+                <Badge className={`text-[10px] ${statusColors[previewOrder.status] || 'bg-gray-100'}`}>
+                  {statusLabels[previewOrder.status] || previewOrder.status}
+                </Badge>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          {previewLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+            </div>
+          ) : previewOrder && (
+            <div className="space-y-4">
+              {/* Temel Bilgiler */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Sipariş No</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium">{previewOrder.orderNumber}</p>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(previewOrder.orderNumber);
+                        toast.success('Kopyalandı');
+                      }}
+                      className="p-0.5 hover:bg-muted rounded"
+                    >
+                      <Copy className="h-3 w-3 text-muted-foreground" />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Tarih</p>
+                  <p className="text-sm font-medium">{formatShortDate(previewOrder.orderDate)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Müşteri</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium">{previewOrder.customerName}</p>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(previewOrder.customerName);
+                        toast.success('Kopyalandı');
+                      }}
+                      className="p-0.5 hover:bg-muted rounded"
+                    >
+                      <Copy className="h-3 w-3 text-muted-foreground" />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Mağaza</p>
+                  <p className="text-sm font-medium">{previewOrder.store?.name || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Ülke</p>
+                  <p className="text-sm font-medium">{previewOrder.country?.name || previewOrder.shippingCountry || '-'}</p>
+                </div>
+              </div>
+
+              {/* Ürünler */}
+              {previewOrder.items && previewOrder.items.length > 0 && (
+                <div className="border rounded-lg p-3 bg-muted/20 space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">Ürünler</p>
+                  {previewOrder.items.map((item: any, i: number) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span>
+                        {item.notes || `${item.canvasSize?.name || '-'} - ${item.frameOption?.name || 'Çerçevesiz'}`}
+                        {item.quantity > 1 && ` (x${item.quantity})`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Finansal */}
+              <div className="border rounded-lg p-3 space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Finansal Özet</p>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Satış:</span>
+                    <span className="font-medium">{formatCurrency(previewOrder.salePrice, previewOrder.saleCurrency || 'USD')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Toplam Maliyet:</span>
+                    <span className="font-medium">{formatCurrency(previewOrder.totalCost || 0, 'USD')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Ürün Maliyet:</span>
+                    <span>{formatCurrency(previewOrder.productCost || 0, 'USD')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Kargo:</span>
+                    <span>{formatCurrency(previewOrder.shippingCost || 0, 'USD')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Etsy Komisyon:</span>
+                    <span>{formatCurrency(previewOrder.etsyFees || 0, 'USD')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Net Kar:</span>
+                    <span className={`font-bold ${(previewOrder.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(previewOrder.netProfit || 0, 'USD')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Kargo */}
+              {previewOrder.trackingNumber && (
+                <div className="border rounded-lg p-3 space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">Kargo Bilgisi</p>
+                  <div className="flex items-center gap-2 text-sm">
+                    <Truck className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">{previewOrder.trackingCompany || '-'}</span>
+                    <span className="text-muted-foreground">•</span>
+                    <span>{previewOrder.trackingNumber}</span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(previewOrder.trackingNumber);
+                        toast.success('Takip kodu kopyalandı');
+                      }}
+                      className="p-0.5 hover:bg-muted rounded"
+                    >
+                      <Copy className="h-3 w-3 text-muted-foreground" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Adres */}
+              {previewOrder.shippingAddress && (
+                <div className="border rounded-lg p-3 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium text-muted-foreground">Teslimat Adresi</p>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(previewOrder.shippingAddress);
+                        toast.success('Adres kopyalandı');
+                      }}
+                      className="p-0.5 hover:bg-muted rounded"
+                    >
+                      <Copy className="h-3 w-3 text-muted-foreground" />
+                    </button>
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap">{previewOrder.shippingAddress}</p>
+                </div>
+              )}
+
+              {/* Notlar */}
+              {previewOrder.notes && (
+                <div className="border rounded-lg p-3 space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground">Notlar</p>
+                  <p className="text-sm">{previewOrder.notes}</p>
+                </div>
+              )}
+
+              {/* Aksiyon Butonları */}
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    setPreviewOrder(null);
+                    router.push(`/dashboard/orders?highlight=${previewOrder.id}`);
+                  }}
+                >
+                  <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                  Siparişe Git
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

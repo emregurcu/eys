@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -127,6 +128,11 @@ interface SizeShippingRate {
 }
 
 export default function OrdersPage() {
+  const searchParams = useSearchParams();
+  const highlightId = searchParams.get('highlight');
+  const highlightRef = useRef<HTMLTableRowElement>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [canvasSizes, setCanvasSizes] = useState<CanvasSize[]>([]);
@@ -188,6 +194,19 @@ export default function OrdersPage() {
   useEffect(() => {
     fetchOrders();
   }, []);
+
+  // Highlight parametresiyle gelen siparişi vurgula ve scroll et
+  useEffect(() => {
+    if (highlightId && !pageLoading && orders.length > 0) {
+      setHighlightedId(highlightId);
+      setTimeout(() => {
+        highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+      // 3 saniye sonra vurgulamayı kaldır
+      const timer = setTimeout(() => setHighlightedId(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [highlightId, pageLoading, orders.length]);
 
   // Dialog açıldığında ek verileri yükle
   useEffect(() => {
@@ -895,7 +914,13 @@ export default function OrdersPage() {
                     </tr>
                   ))
                 ) : sortedOrders.map((order) => (
-                  <tr key={order.id} className={`border-b hover:bg-muted/30 ${selectedOrders.has(order.id) ? 'bg-muted/50' : ''}`}>
+                  <tr
+                    key={order.id}
+                    ref={order.id === highlightedId ? highlightRef : undefined}
+                    className={`border-b hover:bg-muted/30 transition-all duration-700 ${
+                      selectedOrders.has(order.id) ? 'bg-muted/50' : ''
+                    } ${order.id === highlightedId ? 'bg-yellow-100 dark:bg-yellow-900/30 ring-2 ring-yellow-400 ring-inset' : ''}`}
+                  >
                     <td className="p-4">
                       <Checkbox
                         checked={selectedOrders.has(order.id)}
