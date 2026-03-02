@@ -1246,9 +1246,12 @@ export default function OrdersPage() {
 
       {/* Sağ Tık Context Menü */}
       {contextMenu && (
+        <>
+        {/* Context menu backdrop */}
+        <div className="fixed inset-0 z-40 bg-black/20" onClick={() => setContextMenu(null)} />
         <div
           ref={contextMenuRef}
-          className="fixed z-50 bg-popover border rounded-lg shadow-xl py-1 min-w-[220px] animate-in fade-in-0 zoom-in-95"
+          className="fixed z-50 bg-background border rounded-lg shadow-2xl py-1 min-w-[220px] animate-in fade-in-0 zoom-in-95 ring-1 ring-black/5"
           style={{
             left: Math.min(contextMenu.x, window.innerWidth - 240),
             top: Math.min(contextMenu.y, window.innerHeight - 400),
@@ -1345,6 +1348,7 @@ export default function OrdersPage() {
             </button>
           </div>
         </div>
+        </>
       )}
 
       {/* Sipariş Detay Modal */}
