@@ -15,32 +15,54 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const period = searchParams.get('period') || 'month';
     const storeId = searchParams.get('storeId');
+    const customStartDate = searchParams.get('startDate');
+    const customEndDate = searchParams.get('endDate');
+    const orderStatus = searchParams.get('status');
 
     // Tarih aralığını hesapla
     const now = new Date();
     let startDate: Date;
+    let endDate: Date | null = null;
 
-    switch (period) {
-      case 'week':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case 'month':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case 'quarter':
-        startDate = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
-        break;
-      case 'year':
-        startDate = new Date(now.getFullYear(), 0, 1);
-        break;
-      default:
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    if (customStartDate) {
+      // Custom tarih aralığı
+      startDate = new Date(customStartDate);
+      if (customEndDate) {
+        endDate = new Date(customEndDate);
+        endDate.setHours(23, 59, 59, 999);
+      }
+    } else {
+      switch (period) {
+        case 'week':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          break;
+        case 'quarter':
+          startDate = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+          break;
+        case 'year':
+          startDate = new Date(now.getFullYear(), 0, 1);
+          break;
+        case 'all':
+          startDate = new Date(2000, 0, 1);
+          break;
+        default:
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      }
     }
 
     // Filtre oluştur
     const where: any = {
-      orderDate: { gte: startDate },
+      orderDate: endDate
+        ? { gte: startDate, lte: endDate }
+        : { gte: startDate },
     };
+
+    if (orderStatus && orderStatus !== 'all') {
+      where.status = orderStatus;
+    }
 
     if (storeId && storeId !== 'all') {
       where.storeId = storeId;
