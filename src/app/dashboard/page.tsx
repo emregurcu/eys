@@ -391,6 +391,85 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      {/* ─── Son Siparişler + Son Aktiviteler ─── */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Son Siparişler */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Son Siparişler</CardTitle>
+            <Link href="/dashboard/orders" className="text-xs text-primary hover:underline flex items-center gap-1">
+              Tümünü Gör <ChevronRight className="h-3 w-3" />
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {recentOrders.length === 0 ? (
+              <p className="text-center py-6 text-sm text-muted-foreground">Henüz sipariş yok</p>
+            ) : (
+              <div className="space-y-2">
+                {recentOrders.map((order) => (
+                  <div
+                    key={order.id}
+                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div>
+                        <p className="text-sm font-medium">{order.orderNumber}</p>
+                        <p className="text-xs text-muted-foreground truncate">{order.customerName}</p>
+                      </div>
+                    </div>
+                    <span className="hidden sm:block text-xs text-muted-foreground">{order.store?.name}</span>
+                    <Badge className={`text-[10px] ${statusColors[order.status] || 'bg-gray-100'}`}>
+                      {statusLabels[order.status] || order.status}
+                    </Badge>
+                    <div className="text-right">
+                      <p className="text-sm font-medium">{formatCurrency(order.salePrice, 'USD')}</p>
+                      <p className={`text-xs ${(order.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatCurrency(order.netProfit || 0, 'USD')}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Son Aktiviteler */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Activity className="h-4 w-4" /> Son Aktiviteler
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {activities.length === 0 ? (
+              <p className="text-center py-6 text-sm text-muted-foreground">Henüz aktivite yok</p>
+            ) : (
+              <div className="relative">
+                <div className="absolute left-[7px] top-2 bottom-2 w-px bg-border" />
+                <div className="space-y-3">
+                  {activities.map((act) => (
+                    <div key={act.id} className="flex items-start gap-3 relative">
+                      <div className="w-3.5 h-3.5 rounded-full bg-primary/20 border-2 border-primary shrink-0 mt-0.5 z-10" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs leading-relaxed">
+                          <span className="font-medium">{act.user.name}</span>{' '}
+                          <span className="text-muted-foreground">
+                            {entityLabels[act.entity] || act.entity}{' '}
+                            {activityLabels[act.action] || act.action}
+                          </span>
+                        </p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{timeAgo(act.createdAt)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       {/* ─── Sparkline + Durum Dağılımı ─── */}
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Son 7 gün sparkline */}
@@ -622,86 +701,6 @@ export default function DashboardPage() {
                     <span className="text-xs text-muted-foreground shrink-0">{timeAgo(issue.createdAt)}</span>
                   </div>
                 ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ─── Son Siparişler + Son Aktiviteler ─── */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* Son Siparişler */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Son Siparişler</CardTitle>
-            <Link href="/dashboard/orders" className="text-xs text-primary hover:underline flex items-center gap-1">
-              Tümünü Gör <ChevronRight className="h-3 w-3" />
-            </Link>
-          </CardHeader>
-          <CardContent>
-            {recentOrders.length === 0 ? (
-              <p className="text-center py-6 text-sm text-muted-foreground">Henüz sipariş yok</p>
-            ) : (
-              <div className="space-y-2">
-                {recentOrders.map((order) => (
-                  <div
-                    key={order.id}
-                    className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div>
-                        <p className="text-sm font-medium">{order.orderNumber}</p>
-                        <p className="text-xs text-muted-foreground truncate">{order.customerName}</p>
-                      </div>
-                    </div>
-                    <span className="hidden sm:block text-xs text-muted-foreground">{order.store?.name}</span>
-                    <Badge className={`text-[10px] ${statusColors[order.status] || 'bg-gray-100'}`}>
-                      {statusLabels[order.status] || order.status}
-                    </Badge>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">{formatCurrency(order.salePrice, 'USD')}</p>
-                      <p className={`text-xs ${(order.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatCurrency(order.netProfit || 0, 'USD')}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Son Aktiviteler */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Activity className="h-4 w-4" /> Son Aktiviteler
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {activities.length === 0 ? (
-              <p className="text-center py-6 text-sm text-muted-foreground">Henüz aktivite yok</p>
-            ) : (
-              <div className="relative">
-                {/* Timeline line */}
-                <div className="absolute left-[7px] top-2 bottom-2 w-px bg-border" />
-                <div className="space-y-3">
-                  {activities.map((act) => (
-                    <div key={act.id} className="flex items-start gap-3 relative">
-                      <div className="w-3.5 h-3.5 rounded-full bg-primary/20 border-2 border-primary shrink-0 mt-0.5 z-10" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs leading-relaxed">
-                          <span className="font-medium">{act.user.name}</span>{' '}
-                          <span className="text-muted-foreground">
-                            {entityLabels[act.entity] || act.entity}{' '}
-                            {activityLabels[act.action] || act.action}
-                          </span>
-                        </p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">{timeAgo(act.createdAt)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
             )}
           </CardContent>
