@@ -76,29 +76,35 @@ export default function DashboardPage() {
 
   const fetchDashboardData = async () => {
     try {
-      const [ordersRes, financeRes, issuesRes] = await Promise.all([
-        fetch('/api/orders'),
+      const [ordersRes, countRes, financeRes, issuesRes] = await Promise.all([
+        fetch('/api/orders?limit=5'),
+        fetch('/api/orders?countOnly=true'),
         fetch('/api/finance/summary?period=month'),
         fetch('/api/issues?status=OPEN'),
       ]);
 
       if (ordersRes.ok) {
         const orders = await ordersRes.json();
-        setRecentOrders(orders.slice(0, 5));
+        setRecentOrders(orders);
 
         const pendingStatuses = ['NEW', 'PROCESSING', 'PRODUCTION', 'READY'];
         const pendingCount = orders.filter((o: any) => pendingStatuses.includes(o.status)).length;
 
+        // Toplam sipariş sayısı (gerçek count)
+        let totalOrders = 0;
+        if (countRes.ok) {
+          const countData = await countRes.json();
+          totalOrders = countData.count || 0;
+        }
+
         // Finans verisi API'den
         let monthlyRevenue = 0;
         let monthlyProfit = 0;
-        let totalOrders = orders.length;
 
         if (financeRes.ok) {
           const finance = await financeRes.json();
           monthlyRevenue = finance.summary?.totalRevenue || 0;
           monthlyProfit = finance.summary?.totalProfit || 0;
-          totalOrders = Math.max(totalOrders, finance.summary?.orderCount || 0);
         }
 
         // Açık sorunlar

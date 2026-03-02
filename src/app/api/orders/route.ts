@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const storeId = searchParams.get('storeId');
     const status = searchParams.get('status');
+    const limitParam = searchParams.get('limit');
+    const countOnly = searchParams.get('countOnly');
 
     const where: any = {};
 
@@ -31,6 +33,14 @@ export async function GET(req: NextRequest) {
 
     if (storeId) where.storeId = storeId;
     if (status) where.status = status;
+
+    // Sadece count isteniyorsa hızlı dön
+    if (countOnly === 'true') {
+      const count = await prisma.order.count({ where });
+      return NextResponse.json({ count });
+    }
+
+    const take = limitParam ? parseInt(limitParam) : 100;
 
     const orders = await prisma.order.findMany({
       where,
@@ -72,7 +82,7 @@ export async function GET(req: NextRequest) {
         _count: { select: { items: true } },
       },
       orderBy: [{ orderDate: 'desc' }, { createdAt: 'desc' }],
-      take: 100, // Son 100 sipariş
+      take,
     });
 
     return NextResponse.json(orders);
