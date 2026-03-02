@@ -255,6 +255,9 @@ export default function DashboardPage() {
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
 
   const prevOrderCountRef = useRef<number | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const [sseConnected, setSseConnected] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState(false);
 
   const playNewOrderSound = () => {
     try {
@@ -270,7 +273,6 @@ export default function DashboardPage() {
       const res = await fetch('/api/dashboard');
       if (res.ok) {
         const newData: DashboardData = await res.json();
-        // Yeni sipariş geldi mi kontrol et
         if (prevOrderCountRef.current !== null && newData.stats.totalOrders > prevOrderCountRef.current) {
           const diff = newData.stats.totalOrders - prevOrderCountRef.current;
           playNewOrderSound();
@@ -299,25 +301,103 @@ export default function DashboardPage() {
     setPreviewLoading(false);
   };
 
+  const updatePreviewOrderStatus = async (orderId: string, status: string) => {
+    setStatusUpdating(true);
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        toast.success('Durum güncellendi');
+        setPreviewOrder((prev: any) => prev ? { ...prev, status } : null);
+        // Dashboard verisini de güncelle
+        fetchDashboard();
+      } else {
+        toast.error('Güncelleme başarısız');
+      }
+    } catch {
+      toast.error('Güncelleme başarısız');
+    }
+    setStatusUpdating(false);
+  };
+
   useEffect(() => {
     fetchDashboard();
   }, []);
 
-  // Auto-refresh
+  // SSE - Gerçek zamanlı güncelleme
   useEffect(() => {
-    if (autoRefresh) {
+    const connectSSE = () => {
+      const es = new EventSource('/api/dashboard/stream');
+      eventSourceRef.current = es;
+
+      es.onopen = () => setSseConnected(true);
+
+      es.addEventListener('new_orders', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          playNewOrderSound();
+          toast.success(`🎉 ${data.count} yeni sipariş geldi!`, { duration: 5000 });
+          // Dashboard'u tam güncelle
+          fetchDashboard();
+        } catch {}
+      });
+
+      es.addEventListener('update', (e) => {
+        try {
+          const stats = JSON.parse(e.data);
+          // Sadece küçük güncellemeler için state'i güncelle
+          setData((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              stats: {
+                ...prev.stats,
+                totalOrders: stats.totalOrders,
+                pendingOrders: stats.pendingOrders,
+                openIssues: stats.openIssues,
+              },
+            };
+          });
+        } catch {}
+      });
+
+      es.onerror = () => {
+        setSseConnected(false);
+        es.close();
+        // 5 saniye sonra yeniden bağlan
+        setTimeout(connectSSE, 5000);
+      };
+    };
+
+    connectSSE();
+
+    return () => {
+      eventSourceRef.current?.close();
+    };
+  }, []);
+
+  // Fallback polling - SSE bağlantısı yoksa
+  useEffect(() => {
+    if (autoRefresh && !sseConnected) {
       intervalRef.current = setInterval(() => {
         fetchDashboard();
       }, AUTO_REFRESH_INTERVAL);
       countdownRef.current = setInterval(() => {
         setCountdown((prev) => (prev <= 1 ? AUTO_REFRESH_INTERVAL / 1000 : prev - 1));
       }, 1000);
+    } else if (sseConnected) {
+      // SSE bağlı ise polling'i kapat
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
     }
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
     };
-  }, [autoRefresh]);
+  }, [autoRefresh, sseConnected]);
 
   if (loading || !data) {
     return (
@@ -347,14 +427,21 @@ export default function DashboardPage() {
           <p className="text-muted-foreground">İşte mağazalarınızın güncel durumu</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant={autoRefresh ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setAutoRefresh(!autoRefresh)}
-            className="text-xs"
-          >
-            {autoRefresh ? `⏱ ${countdown}s` : '⏸ Durduruldu'}
-          </Button>
+          {sseConnected ? (
+            <span className="flex items-center gap-1.5 text-xs text-green-600 px-2 py-1 rounded-md bg-green-50 border border-green-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              Canlı
+            </span>
+          ) : (
+            <Button
+              variant={autoRefresh ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setAutoRefresh(!autoRefresh)}
+              className="text-xs"
+            >
+              {autoRefresh ? `⏱ ${countdown}s` : '⏸ Durduruldu'}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Yenile
           </Button>
@@ -971,6 +1058,33 @@ export default function DashboardPage() {
                   <p className="text-sm">{previewOrder.notes}</p>
                 </div>
               )}
+
+              {/* Hızlı Durum Güncelleme */}
+              <div className="border rounded-lg p-3 space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Durumu Değiştir</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { key: 'NEW', label: 'Yeni', icon: '🆕' },
+                    { key: 'PROCESSING', label: 'İşleniyor', icon: '⚙️' },
+                    { key: 'PRODUCTION', label: 'Üretimde', icon: '🏭' },
+                    { key: 'READY', label: 'Hazır', icon: '✅' },
+                    { key: 'SHIPPED', label: 'Kargoda', icon: '📦' },
+                    { key: 'DELIVERED', label: 'Teslim', icon: '🎉' },
+                    { key: 'PROBLEM', label: 'Problem', icon: '⚠️' },
+                  ].map((s) => (
+                    <Button
+                      key={s.key}
+                      variant={previewOrder.status === s.key ? 'default' : 'outline'}
+                      size="sm"
+                      className="text-xs h-7 px-2"
+                      disabled={previewOrder.status === s.key || statusUpdating}
+                      onClick={() => updatePreviewOrderStatus(previewOrder.id, s.key)}
+                    >
+                      <span className="mr-1">{s.icon}</span> {s.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
 
               {/* Aksiyon Butonları */}
               <div className="flex gap-2 pt-2">

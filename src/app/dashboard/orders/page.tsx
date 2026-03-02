@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -133,6 +133,10 @@ export default function OrdersPage() {
   const highlightRef = useRef<HTMLTableRowElement>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; order: Order } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [canvasSizes, setCanvasSizes] = useState<CanvasSize[]>([]);
@@ -202,11 +206,40 @@ export default function OrdersPage() {
       setTimeout(() => {
         highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 300);
-      // 3 saniye sonra vurgulamayı kaldır
       const timer = setTimeout(() => setHighlightedId(null), 4000);
       return () => clearTimeout(timer);
     }
   }, [highlightId, pageLoading, orders.length]);
+
+  // Context menü - dışarı tıklanınca kapat
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    const handleScroll = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener('click', handleClick);
+      document.addEventListener('scroll', handleScroll, true);
+    }
+    return () => {
+      document.removeEventListener('click', handleClick);
+      document.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [contextMenu]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, order: Order) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, order });
+  }, []);
+
+  const contextStatusFlow: { key: string; label: string; color: string; icon: string }[] = [
+    { key: 'NEW', label: 'Yeni', color: 'text-blue-600', icon: '🆕' },
+    { key: 'PROCESSING', label: 'İşleniyor', color: 'text-yellow-600', icon: '⚙️' },
+    { key: 'PRODUCTION', label: 'Üretimde', color: 'text-purple-600', icon: '🏭' },
+    { key: 'READY', label: 'Hazır', color: 'text-cyan-600', icon: '✅' },
+    { key: 'SHIPPED', label: 'Kargoda', color: 'text-indigo-600', icon: '📦' },
+    { key: 'DELIVERED', label: 'Teslim', color: 'text-green-600', icon: '🎉' },
+    { key: 'PROBLEM', label: 'Problem', color: 'text-red-600', icon: '⚠️' },
+    { key: 'CANCELLED', label: 'İptal', color: 'text-gray-600', icon: '❌' },
+  ];
 
   // Dialog açıldığında ek verileri yükle
   useEffect(() => {
@@ -917,6 +950,7 @@ export default function OrdersPage() {
                   <tr
                     key={order.id}
                     ref={order.id === highlightedId ? highlightRef : undefined}
+                    onContextMenu={(e) => handleContextMenu(e, order)}
                     className={`border-b hover:bg-muted/30 transition-all duration-700 ${
                       selectedOrders.has(order.id) ? 'bg-muted/50' : ''
                     } ${order.id === highlightedId ? 'bg-yellow-100 dark:bg-yellow-900/30 ring-2 ring-yellow-400 ring-inset' : ''}`}
@@ -1068,6 +1102,109 @@ export default function OrdersPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Sağ Tık Context Menü */}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed z-50 bg-popover border rounded-lg shadow-xl py-1 min-w-[220px] animate-in fade-in-0 zoom-in-95"
+          style={{
+            left: Math.min(contextMenu.x, window.innerWidth - 240),
+            top: Math.min(contextMenu.y, window.innerHeight - 400),
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-2 border-b">
+            <p className="text-xs font-medium text-muted-foreground">Sipariş: {contextMenu.order.orderNumber}</p>
+            <p className="text-xs text-muted-foreground">{contextMenu.order.customerName}</p>
+          </div>
+          <div className="py-1">
+            <p className="px-3 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Durumu Değiştir</p>
+            {contextStatusFlow.map((s) => (
+              <button
+                key={s.key}
+                disabled={contextMenu.order.status === s.key}
+                onClick={() => {
+                  updateOrderStatus(contextMenu.order.id, s.key);
+                  setContextMenu(null);
+                }}
+                className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent transition-colors ${
+                  contextMenu.order.status === s.key ? 'bg-accent/50 font-medium' : ''
+                }`}
+              >
+                <span>{s.icon}</span>
+                <span className={contextMenu.order.status === s.key ? s.color + ' font-medium' : ''}>{s.label}</span>
+                {contextMenu.order.status === s.key && (
+                  <span className="ml-auto text-[10px] text-muted-foreground">Mevcut</span>
+                )}
+              </button>
+            ))}
+          </div>
+          <div className="border-t py-1">
+            <button
+              onClick={() => { setSelectedOrder(contextMenu.order); setContextMenu(null); }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+            >
+              <Eye className="h-3.5 w-3.5" /> Detay Görüntüle
+            </button>
+            <button
+              onClick={() => { setEditingOrder(contextMenu.order); setContextMenu(null); }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+            >
+              <Edit className="h-3.5 w-3.5" /> Düzenle
+            </button>
+            <button
+              onClick={() => {
+                setOrderForShipping(contextMenu.order);
+                setShippingForm({
+                  trackingNumber: contextMenu.order.trackingNumber || '',
+                  trackingCompany: contextMenu.order.trackingCompany || '',
+                });
+                setContextMenu(null);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+            >
+              <Truck className="h-3.5 w-3.5" /> Kargo Ekle
+            </button>
+            <button
+              onClick={() => { handleSinglePDF(contextMenu.order); setContextMenu(null); }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+            >
+              <FileDown className="h-3.5 w-3.5" /> PDF İndir
+            </button>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(contextMenu.order.orderNumber);
+                toast.success('Sipariş no kopyalandı');
+                setContextMenu(null);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+            >
+              <Copy className="h-3.5 w-3.5" /> Sipariş No Kopyala
+            </button>
+            {contextMenu.order.trackingNumber && (
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(contextMenu.order.trackingNumber || '');
+                  toast.success('Takip kodu kopyalandı');
+                  setContextMenu(null);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent"
+              >
+                <Copy className="h-3.5 w-3.5" /> Takip Kodu Kopyala
+              </button>
+            )}
+          </div>
+          <div className="border-t py-1">
+            <button
+              onClick={() => { deleteOrder(contextMenu.order.id); setContextMenu(null); }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Sil
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Sipariş Detay Modal */}
       <Dialog open={!!selectedOrder} onOpenChange={() => setSelectedOrder(null)}>
